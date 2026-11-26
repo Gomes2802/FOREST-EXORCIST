@@ -1,0 +1,344 @@
+:root {
+  --night: #0a1020;
+  --bone: #d9d6c3;
+  --blood: #a3262f;
+  --moss: #6f8f78;
+  --panel: rgba(6, 9, 18, 0.86);
+  --pixel: 4px;
+  font-family: "DejaVu Sans Mono", "Liberation Mono", "Courier New", monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--night);
+  color: var(--bone);
+}
+
+#game-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  outline: none;
+  image-rendering: pixelated;
+}
+
+img[data-pixelate] {
+  image-rendering: pixelated;
+}
+
+.screen {
+  position: fixed;
+  inset: 0;
+}
+
+.screen--menu {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(16px, 4vh, 36px);
+  padding: 16px;
+  text-align: center;
+  overflow-y: auto;
+  background: radial-gradient(ellipse at center, rgba(5, 8, 16, 0.45) 0%, rgba(3, 4, 9, 0.9) 100%);
+}
+
+.title {
+  width: min(640px, 90vw);
+}
+
+.title-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(0 6px 0 rgba(0, 0, 0, 0.75));
+}
+
+.title-text,
+.title--text .title-image {
+  display: none;
+}
+
+.title--text .title-text {
+  display: block;
+}
+
+h1,
+h2 {
+  letter-spacing: 0.12em;
+  color: var(--bone);
+  text-shadow: var(--pixel) var(--pixel) 0 var(--blood);
+}
+
+.buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: min(340px, 90vw);
+}
+
+button {
+  font: inherit;
+  font-size: 18px;
+  font-weight: bold;
+  letter-spacing: 0.15em;
+  color: var(--bone);
+  background: var(--panel);
+  border: var(--pixel) solid #3b4660;
+  border-radius: 0;
+  box-shadow: var(--pixel) var(--pixel) 0 #000;
+  padding: 12px 16px;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled),
+button:focus-visible {
+  border-color: var(--blood);
+  background: #1a0d14;
+  outline: none;
+}
+
+button:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 #000;
+}
+
+button:disabled {
+  color: #626776;
+  cursor: wait;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: min(560px, 92vw);
+  padding: 24px;
+  background: var(--panel);
+  border: var(--pixel) solid #3b4660;
+  line-height: 1.5;
+}
+
+label {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+select {
+  font: inherit;
+  color: var(--bone);
+  background: #10172a;
+  border: 2px solid #3b4660;
+  border-radius: 0;
+  padding: 6px 8px;
+  min-width: 230px;
+}
+
+select:focus-visible {
+  border-color: var(--blood);
+  outline: none;
+}
+
+.hint,
+.status {
+  font-size: 13px;
+  color: #8f98ad;
+}
+
+.status {
+  min-height: 1.5em;
+  max-width: 640px;
+}
+
+.status[data-level="warning"] {
+  color: #e0b45a;
+}
+
+.status[data-level="error"] {
+  color: #ff6b6b;
+}
+
+kbd {
+  font: inherit;
+  border: 2px solid #4a5570;
+  background: #10172a;
+  padding: 0 6px;
+}
+
+.screen--hud {
+  pointer-events: none;
+}
+
+.screen--pause {
+  background: rgba(3, 4, 9, 0.55);
+}
+
+.screen--pause h2 {
+  font-size: 40px;
+}
+
+.hud-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 92vw;
+  text-align: center;
+  font-size: 14px;
+  padding: 6px 12px;
+  background: rgba(3, 4, 9, 0.65);
+}
+
+.hud-button {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  font-size: 13px;
+  pointer-events: auto;
+}
+
+/* Interface do exorcismo: pequena, nas cores do menu. */
+#crosshair {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--pixel);
+  height: var(--pixel);
+  transform: translate(-50%, -50%);
+  background: rgba(217, 214, 195, 0.65);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.6);
+}
+
+/* Entidade identificada: o ponto vira um losango com moldura. */
+#crosshair[data-aim="target"],
+#crosshair[data-aim="exorcising"] {
+  width: 18px;
+  height: 18px;
+  transform: translate(-50%, -50%) rotate(45deg);
+  background: transparent;
+  border: 3px solid #e0454f;
+}
+
+#crosshair[data-aim="exorcising"] {
+  border-color: #ffd27a;
+}
+
+#exorcism {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 40px);
+  transform: translateX(-50%);
+  width: min(260px, 60vw);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: rgba(3, 4, 9, 0.6);
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  text-shadow: 2px 2px 0 #000;
+  opacity: 0.65;
+}
+
+#exorcism[data-active="true"] {
+  opacity: 1;
+}
+
+.exorcism-track {
+  width: 100%;
+  height: 14px;
+  padding: 2px;
+  background: rgba(3, 4, 9, 0.75);
+  border: 2px solid #3b4660;
+}
+
+#exorcism-fill {
+  width: 0;
+  height: 100%;
+  background: #ffd27a;
+}
+
+#cross-indicator {
+  position: absolute;
+  left: 20px;
+  bottom: 64px;
+  font-size: 13px;
+  letter-spacing: 0.15em;
+  color: #ffd27a;
+  padding: 6px 12px;
+  background: rgba(3, 4, 9, 0.65);
+}
+
+#hud-message {
+  position: absolute;
+  left: 50%;
+  top: 16%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 92vw;
+  text-align: center;
+  letter-spacing: 0.1em;
+  padding: 8px 16px;
+  background: rgba(3, 4, 9, 0.7);
+  border-bottom: var(--pixel) solid var(--blood);
+}
+
+#hud-flash {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(255, 226, 170, 0.35) 0%, transparent 65%);
+  opacity: 0;
+  animation: flash 0.9s ease-out;
+}
+
+@keyframes flash {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+.notice {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 24px;
+  text-align: center;
+  background: var(--night);
+}
+
+.notice pre {
+  font-size: 20px;
+  padding: 12px 24px;
+  background: #000;
+  border: var(--pixel) solid #3b4660;
+  user-select: all;
+}

@@ -1,0 +1,29 @@
+{
+  "sprites": {
+    "tree_01": { "file": "environment/tree_01.png", "group": "tree", "worldHeight": 5.5, "collisionRadius": 0.35 },
+    "dead_tree_01": { "file": "environment/dead_tree_01.png", "group": "dead_tree", "worldHeight": 4.5, "collisionRadius": 0.3 },
+    "tree_02": { "file": "environment/tree_02.png", "group": "tree", "worldHeight": 7.5, "collisionRadius": 0.35 },
+    "tree_small_01": { "file": "environment/tree_small_01.png", "group": "tree_small", "worldHeight": 3, "collisionRadius": 0.2 },
+    "dead_tree_02": { "file": "environment/dead_tree_02.png", "group": "dead_tree", "worldHeight": 6, "collisionRadius": 0.28 },
+    "bush_02": { "file": "environment/bush_02.png", "group": "vegetation", "worldHeight": 1.25 },
+    "fern_01": { "file": "environment/fern_01.png", "group": "plant", "worldHeight": 0.7 },
+    "plant_01": { "file": "environment/plant_01.png", "group": "plant", "worldHeight": 0.55 },
+    "grass_01": { "file": "environment/grass_01.png", "group": "grass", "worldHeight": 0.5 },
+    "grass_02": { "file": "environment/grass_02.png", "group": "grass", "worldHeight": 0.35 },
+    "rock_02": { "file": "environment/rock_02.png", "group": "rock", "worldHeight": 1.3, "collisionRadius": 0.65 },
+    "log_01": { "file": "environment/log_01.png", "group": "log", "worldHeight": 0.7, "pixelHeight": 16, "collisionRadius": 0.35 },
+    "backdrop_01": { "file": "environment/backdrop_01.png", "group": "backdrop", "worldHeight": 11, "pixelHeight": 64 },
+    "shadow_01": { "file": "environment/shadow_01.png", "group": "shadow", "pixelHeight": 32, "alphaMode": "blend" },
+    "bush_01": { "file": "environment/bush_01.png", "group": "vegetation", "worldHeight": 0.875 },
+    "rock_01": { "file": "environment/rock_01.png", "group": "rock", "worldHeight": 0.75, "collisionRadius": 0.45 },
+    "ghost_01": {
+      "file": "entities/ghost_01.png",
+      "group": "entity",
+      "worldHeight": 2.5,
+      "alphaMode": "blend",
+      "shading": "glow"
+    },
+    "held_cross": { "file": "items/held_cross.png", "group": "held", "pixelHeight": 48 },
+    "cross": { "file": "items/cross.png", "group": "item", "worldHeight": 1.5, "shading": "glow" }
+  }
+}

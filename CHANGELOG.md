@@ -1,0 +1,91 @@
+# Changelog
+
+## 0.4.0 — 2026-11-26
+
+Etapa 4: cruz e sistema de exorcismo.
+
+### Adicionado
+
+- Cruz na mão do jogador, erguida com o botão esquerdo, com animação de subida e
+  descida (`player/cross.js`, sprite substituível `held_cross`).
+- Mira por raycast com alcance e bloqueio por obstáculos
+  (`systems/interaction.js`).
+- Exorcismo por tempo, independente da taxa de quadros (`systems/exorcism.js`).
+- Entidade de teste com os estados presente, sendo exorcizada e exorcizada, com
+  efeitos e desaparecimento suave (`entities/entity.js`).
+- Mira, aviso de cruz erguida, barra de progresso, mensagem e clarão
+  (`ui/hud.js`).
+- Testes unitários e de navegador da etapa.
+
+### Alterado
+
+- O fantasma deixou de ser um objeto decorativo da floresta e passou a ser a
+  entidade de teste, no mesmo lugar.
+
+## 0.3.0 — 2026-11-26
+
+Etapa 3: floresta e ambientação noturna.
+
+### Adicionado
+
+- Trilhas de terra com bordas irregulares e chão com variação de tom.
+- Árvores altas, pequenas e secas, arbustos, plantas, grama, pedras e troncos
+  caídos, com 12 sprites provisórios novos e a textura `path.png`.
+- Céu em degradê, silhuetas de floresta no horizonte e sombras fixas no chão.
+- Lanterna em cone presa à câmera, ligada e desligada com `F`.
+- Distância de desenho ligada à densidade da neblina.
+- `world/environment.js` e testes da floresta, da iluminação e da lanterna.
+
+### Alterado
+
+- Área explorável ampliada de raio 27 para 32; chão de 120 para 180.
+- A luz pontual que seguia o jogador deu lugar à lanterna.
+- Luz ambiente e luar agora afetam chão, trilhas e troncos; os sprites recebem a
+  cor da noite e a lanterna.
+
+### Corrigido
+
+- O servidor local recusava conexões ao carregar muitos arquivos de uma vez.
+- Os testes de navegador não encontravam o Chrome nem o Python no Windows.
+
+## 0.2.0 — 2026-11-26
+
+Etapa 2: jogador e câmera em primeira pessoa.
+
+### Adicionado
+
+- Movimento com WASD e corrida com Shift, com aceleração, diagonal normalizada e
+  passo fixo independente da taxa de quadros.
+- Câmera com mouse look suavizado, limite vertical e balanço de caminhada.
+- Colisões com árvores e pedras (`collisionRadius` no manifesto) e limite do
+  terreno.
+- Pointer Lock, tela de pausa e alternativa de arrastar para olhar.
+- Testes unitários e de navegador para os itens acima, e teste opcional com
+  captura real do mouse.
+
+### Alterado
+
+- A câmera saiu de `player.js` para `core/camera.js`; o balanço automático ficou
+  restrito ao menu.
+- O aviso "Cena de demonstração" e seu botão deram lugar à tela de pausa.
+- Terreno ampliado de 90 para 120 e novo anel externo de árvores.
+- A lanterna e a lua acompanham o jogador.
+
+## 0.1.0 — 2026-11-26
+
+Etapa 1: fundação e arquitetura.
+
+### Adicionado
+
+- Estrutura modular em ES Modules, com Babylon.js 9.37.2 armazenado localmente.
+- `SpriteManager`: manifesto de sprites, grupos, cache e alternativa visual para
+  arquivos ausentes.
+- `PixelRenderer`: redução nearest-neighbor, filtros de textura, resolução de
+  renderização e pixelização de imagens de interface.
+- Cena noturna de demonstração com chão, lua, neblina, iluminação, árvores,
+  vegetação, pedras, entidade e cruz.
+- Pixel art provisória original, gerada por script.
+- Menu com Jogar, Configurações e Sair.
+- Execução offline por servidor local (`start.sh` / `serve.py`) e aviso para
+  `file://`.
+- Build de distribuição e testes unitários e de navegador.

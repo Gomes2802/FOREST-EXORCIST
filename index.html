@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Bloqueia qualquer acesso externo: o jogo é totalmente offline. -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'">
+  <title>Forest Exorcist</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="style.css">
+  <script src="src/boot.js"></script>
+  <script src="lib/babylon.js" defer></script>
+  <script src="src/main.js" type="module"></script>
+</head>
+<body data-view="main">
+  <canvas id="game-canvas" tabindex="-1" aria-label="Cena 3D da floresta"></canvas>
+
+  <div id="file-warning" class="notice" role="alert" hidden>
+    <h1>FOREST EXORCIST</h1>
+    <p>O Chrome não permite carregar o jogo abrindo o arquivo diretamente (<code>file://</code>).</p>
+    <p>Abra um terminal na pasta do jogo e execute:</p>
+    <pre>./start.sh</pre>
+    <p>ou <code>python3 serve.py</code>. Não é necessária conexão com a internet.</p>
+  </div>
+
+  <div id="menu">
+    <section class="screen screen--menu" data-screen="main" aria-label="Menu principal">
+      <h1 class="title">
+        <img class="title-image" src="assets/textures/ui/title.png" alt="FOREST EXORCIST" data-pixelate>
+        <span class="title-text" aria-hidden="true">FOREST EXORCIST</span>
+      </h1>
+      <nav class="buttons">
+        <button type="button" data-action="play" disabled>JOGAR</button>
+        <button type="button" data-action="settings">CONFIGURAÇÕES</button>
+        <button type="button" data-action="quit">SAIR</button>
+      </nav>
+      <p class="hint"><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> andar &middot;
+        <kbd>Shift</kbd> correr &middot; mouse olhar<br>
+        segure o botão esquerdo: cruz &middot; <kbd>F</kbd> lanterna &middot; <kbd>Esc</kbd> pausar</p>
+      <p id="menu-status" class="status" role="status">Carregando...</p>
+    </section>
+
+    <section class="screen screen--menu" data-screen="settings" aria-label="Configurações" hidden>
+      <h2>CONFIGURAÇÕES</h2>
+      <div class="panel">
+        <label>Pixelização da imagem
+          <select data-setting="renderScale">
+            <option value="1">Desligada (mais pesado)</option>
+            <option value="2">Média</option>
+            <option value="3">Forte</option>
+            <option value="4">Muito forte (mais leve)</option>
+          </select>
+        </label>
+        <label>Resolução dos sprites
+          <select data-setting="resolutionScale">
+            <option value="0.5">50%</option>
+            <option value="0.75">75%</option>
+            <option value="1">100%</option>
+            <option value="1.5">150%</option>
+            <option value="2">200%</option>
+          </select>
+        </label>
+        <label>Neblina
+          <select data-setting="fogDensity">
+            <option value="0.035">Leve</option>
+            <option value="0.055">Normal</option>
+            <option value="0.085">Densa</option>
+          </select>
+        </label>
+        <p class="hint">200% só tem efeito em imagens maiores que o tamanho padrão no jogo.<br>
+          Os ajustes valem até a página ser fechada.</p>
+      </div>
+      <div class="buttons">
+        <button type="button" data-action="back">VOLTAR</button>
+      </div>
+    </section>
+
+    <section class="screen screen--menu" data-screen="quit" aria-label="Sair" hidden>
+      <h2>SAIR</h2>
+      <div class="panel">
+        <p>O navegador não permite que o jogo feche esta aba sozinho.</p>
+        <p>Para sair, pressione <kbd>Ctrl</kbd> + <kbd>W</kbd>.</p>
+        <p class="hint">Se usou o terminal para abrir o jogo, pressione <kbd>Ctrl</kbd> + <kbd>C</kbd> nele.</p>
+      </div>
+      <div class="buttons">
+        <button type="button" data-action="back">VOLTAR</button>
+      </div>
+    </section>
+
+    <section class="screen screen--hud" data-screen="hud" aria-label="Jogo" hidden>
+      <div id="hud-flash" aria-hidden="true" hidden></div>
+      <div id="crosshair" data-aim="idle" aria-hidden="true"></div>
+      <div id="exorcism" role="progressbar" aria-label="Exorcismo" aria-valuemin="0" aria-valuemax="100" hidden>
+        <span>EXORCISMO</span>
+        <div class="exorcism-track"><div id="exorcism-fill"></div></div>
+      </div>
+      <p id="cross-indicator" hidden>&#10013; CRUZ ERGUIDA</p>
+      <p id="hud-message" role="status" hidden></p>
+      <div id="drag-help" hidden>
+        <p class="hud-hint">Mouse não capturado: segure o botão esquerdo e arraste para olhar.
+          <kbd>F</kbd> lanterna, <kbd>Esc</kbd> pausa.</p>
+        <button type="button" class="hud-button" data-action="pause">PAUSAR</button>
+      </div>
+    </section>
+
+    <section class="screen screen--menu screen--pause" data-screen="pause" aria-label="Pausa" hidden>
+      <h2>PAUSADO</h2>
+      <p id="pause-notice" class="status" data-level="warning" role="alert" hidden>
+        O navegador não liberou a captura do mouse. Aguarde um segundo e clique em Continuar,
+        ou jogue sem a captura.</p>
+      <div class="buttons">
+        <button type="button" data-action="resume">CONTINUAR</button>
+        <button type="button" data-action="resume-nolock" hidden>JOGAR SEM CAPTURA</button>
+        <button type="button" data-action="back">MENU PRINCIPAL</button>
+      </div>
+      <p class="hint"><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> andar &middot;
+        <kbd>Shift</kbd> correr &middot; botão esquerdo: cruz &middot; <kbd>F</kbd> lanterna &middot;
+        <kbd>Esc</kbd> libera o mouse e pausa</p>
+    </section>
+  </div>
+</body>
+</html>

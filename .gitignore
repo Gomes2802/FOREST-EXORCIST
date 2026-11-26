@@ -1,0 +1,33 @@
+# Dependências de desenvolvimento (só servem para atualizar lib/ com npm run vendor).
+node_modules/
+
+# Versão de distribuição: gerada por "npm run build" a partir dos arquivos versionados.
+dist/
+
+# Resultados de testes, capturas e medições.
+screenshots/
+benchmarks/results/
+coverage/
+*.log
+npm-debug.log*
+
+# Temporários, caches e arquivos de sistema.
+*.tmp
+*.swp
+*~
+.cache/
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editores.
+.vscode/
+.idea/
+
+# Ambiente e credenciais.
+.env
+.env.*
+*.pem
+*.key

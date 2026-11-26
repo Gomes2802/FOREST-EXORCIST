@@ -1,0 +1,23 @@
+{
+  "name": "forest-exorcist",
+  "version": "0.4.0",
+  "private": true,
+  "description": "Terror sobrenatural em primeira pessoa com pixel art em ambiente 3D (offline).",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "python3 serve.py",
+    "vendor": "node tools/vendor.mjs",
+    "placeholders": "node tools/generate-placeholders.mjs",
+    "build": "node tools/build.mjs",
+    "test": "node --test tests/unit/*.test.js",
+    "test:browser": "node --test --test-concurrency=1 tests/browser/*.test.js",
+    "test:real": "node --test tests/real/*.test.js",
+    "check": "npm run build && npm test && npm run test:browser"
+  },
+  "devDependencies": {
+    "babylonjs": "9.37.2"
+  }
+}
