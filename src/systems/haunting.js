@@ -9,10 +9,15 @@
  * Em qualquer humor, some se o jogador chegar perto demais ou se afastar demais.
  * Durante o exorcismo nada disso acontece, e interrompê-lo dá um tempo de graça.
  *
+ * Conforme as opções do tipo, a entidade ainda pode:
+ *  - surgir junto a uma construção (anchorChance), numa janela ou na entrada;
+ *  - mudar discretamente de lugar enquanto não é vista (relocate);
+ *  - sumir e reaparecer logo em outro ponto (blink).
+ *
  * A lógica avança em passos fixos: o resultado não depende da taxa de quadros.
  */
 import { STATES } from '../entities/entity.js';
-import { chooseSpawn, fogVisibleDistance, viewAngle } from './spawn.js';
+import { chooseSpawn, fogVisibleDistance, isOccupied, isValidAnchor, viewAngle } from './spawn.js';
 import { isBlocked } from './interaction.js';
 
 const { DORMANT, APPEARING, WATCHING, DISAPPEARING, EXORCIZING, EXORCISED } = STATES;
@@ -21,11 +26,12 @@ const MAX_STEPS = 12;
 
 /**
  * @param {{ entity: object, settings: object, random: () => number,
- *   world: () => object, onEvent?: (name: string) => void }} deps
- *   world() devolve { boundaryRadius, paths, fogDensity, occluders, blockers }.
+ *   world: () => object, onEvent?: (name: string) => void, gate?: () => boolean }} deps
+ *   world() devolve { boundaryRadius, paths, fogDensity, occluders, blockers } e,
+ *   opcionalmente, forbidden, anchors e others. gate() veta uma nova aparição.
  */
 export function createHaunting({
-  entity, settings, random, world, onEvent = () => {},
+  entity, settings, random, world, onEvent = () => {}, gate = () => true,
 }) {
   let accumulator = 0;
   /** Adormecida: segundos que faltam. Presente: segundos de observação. */
@@ -42,11 +48,21 @@ export function createHaunting({
   /** Ancorada (testes e medições): presente e sem decisões próprias. */
   let pinned = false;
   let snapFacing = false;
+  /** A aparição atual é junto a uma construção (distâncias próprias). */
+  let anchored = null;
+  let hops = 0;
+  let moves = 0;
+  let sinceMove = 0;
+  let unseen = 0;
+  let nextCheck = 0;
 
   const between = ({ min, max }) => min + random() * (max - min);
 
   function pickMood() {
-    const options = Object.entries(settings.moods).filter(([name]) => name !== mood);
+    const all = Object.entries(settings.moods);
+    // Com um só comportamento possível, ele se repete.
+    const others = all.filter(([name]) => name !== mood);
+    const options = others.length > 0 ? others : all;
     let pick = random() * options.reduce((sum, [, weight]) => sum + weight, 0);
     for (const [name, weight] of options) {
       pick -= weight;
@@ -64,10 +80,32 @@ export function createHaunting({
     looking = false;
     sense = 0;
     stay = start;
+    anchored = null;
+    moves = 0;
+    sinceMove = 0;
+    unseen = 0;
+    nextCheck = 0;
+  }
+
+  /** Um ponto de janela ou entrada que sirva agora, se o sorteio pedir. */
+  function pickAnchor(viewer, state) {
+    if (!settings.anchorChance) return null;
+    const valid = (state.anchors ?? []).filter((anchor) => isValidAnchor(anchor, {
+      viewer, world: state, settings, previous,
+    }));
+    // O sorteio só consome números quando há onde aparecer.
+    if (valid.length === 0 || random() >= settings.anchorChance) return null;
+    return valid[Math.floor(random() * valid.length)];
   }
 
   function tryAppear(viewer) {
-    const spot = chooseSpawn({ random, viewer, world: world(), settings, previous });
+    if (!gate()) {
+      timer = settings.retryDelay;
+      return;
+    }
+    const state = world();
+    const anchor = pickAnchor(viewer, state);
+    const spot = anchor ?? chooseSpawn({ random, viewer, world: state, settings, previous });
     if (!spot) {
       timer = settings.retryDelay;
       return;
@@ -83,7 +121,8 @@ export function createHaunting({
     entity.face(viewer);
     entity.transition(APPEARING);
     observeFrom(between(settings.stay));
-    previous = spot;
+    anchored = anchor;
+    previous = { x: spot.x, z: spot.z };
     onEvent('appear');
   }
 
@@ -100,9 +139,51 @@ export function createHaunting({
     if (entity.vanish(duration)) onEvent('vanish');
   }
 
+  /** O ponto está fora da vista: bem ao lado, às costas ou atrás de algo. */
+  function isHidden(point, viewer, state) {
+    if (viewAngle(viewer, point) > (settings.relocate.hiddenAngle * Math.PI) / 180) return true;
+    const eye = { x: viewer.x, y: viewer.eyeHeight, z: viewer.z };
+    return [1, 1.8].every((height) => isBlocked(eye, { x: point.x, y: height, z: point.z }, state.occluders));
+  }
+
+  /** Muda de lugar sem que o jogador veja: nem a saída, nem a chegada. */
+  function tryRelocate(dt, viewer) {
+    const rule = settings.relocate;
+    sinceMove += dt;
+    if (moves >= rule.max || sinceMove < rule.wait) return;
+    // A visão é conferida algumas vezes por segundo, não a cada passo.
+    nextCheck -= dt;
+    if (nextCheck > 0) return;
+    nextCheck += settings.senseInterval;
+    const state = world();
+    unseen = isHidden(entity.center, viewer, state) ? unseen + settings.senseInterval : 0;
+    if (unseen < rule.unseenFor) return;
+    for (let attempt = 0; attempt < 24; attempt += 1) {
+      const angle = random() * Math.PI * 2;
+      const length = rule.minStep + random() * (rule.maxStep - rule.minStep);
+      const spot = { x: entity.center.x + Math.sin(angle) * length, z: entity.center.z + Math.cos(angle) * length };
+      const distance = Math.hypot(spot.x - viewer.x, spot.z - viewer.z);
+      if (distance < settings.fleeDistance + 3 || distance > settings.maxDistance) continue;
+      if (Math.hypot(spot.x, spot.z) > state.boundaryRadius - 1) continue;
+      if (!isHidden(spot, viewer, state) || isOccupied(spot, { viewer, world: state, settings })) continue;
+      entity.placeAt(spot.x, spot.z);
+      entity.face(viewer);
+      entity.redraw();
+      previous = spot;
+      anchored = null;
+      moves += 1;
+      sinceMove = 0;
+      unseen = 0;
+      onEvent('relocate');
+      return;
+    }
+    sinceMove = rule.wait - 0.5; // Sem lugar agora: tenta de novo em breve.
+  }
+
   function observe(dt, viewer) {
     const distance = Math.hypot(entity.center.x - viewer.x, entity.center.z - viewer.z);
-    if (distance < settings.fleeDistance) {
+    const flee = anchored ? settings.anchorFleeDistance : settings.fleeDistance;
+    if (distance < flee) {
       leave(settings.fleeDisappearTime);
       return;
     }
@@ -118,6 +199,7 @@ export function createHaunting({
       lost = 0;
       return;
     }
+    if (settings.relocate) tryRelocate(dt, viewer);
     if (mood !== 'still') {
       sense -= dt;
       if (sense <= 0) {
@@ -158,7 +240,14 @@ export function createHaunting({
       if (entity.presence === 0) {
         entity.transition(DORMANT);
         entity.redraw();
-        timer = between(settings.interval);
+        const { blink } = settings;
+        if (blink && hops < blink.max && random() < blink.chance) {
+          hops += 1;
+          timer = between(blink.delay);
+        } else {
+          hops = 0;
+          timer = between(settings.interval);
+        }
         onEvent('gone');
       }
       return;
@@ -170,6 +259,17 @@ export function createHaunting({
   return {
     get mood() {
       return mood;
+    },
+    /** Ponto de construção da aparição atual, ou null. */
+    get anchor() {
+      return anchored;
+    },
+    /** Reaparições seguidas e mudanças de lugar nesta aparição. */
+    get hops() {
+      return hops;
+    },
+    get moves() {
+      return moves;
     },
     get timer() {
       return timer;
@@ -212,6 +312,7 @@ export function createHaunting({
       mood = 'still';
       previous = null;
       pinned = false;
+      hops = 0;
       observeFrom(0);
       timer = settings.first.delay;
     },

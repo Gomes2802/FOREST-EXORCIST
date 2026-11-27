@@ -496,7 +496,181 @@ function heldCross() {
   return img;
 }
 
+/** Tábuas verticais envelhecidas, com frestas, nós e manchas; sem emendas. */
+function planks() {
+  const img = new Bitmap(64, 64);
+  const random = createRandom(131);
+  const tones = [['#5a4331', '#634a37', '#52402f'], ['#4c3a2b', '#554131', '#463628'], ['#66503c', '#5c4735', '#6e5741']];
+  for (let board = 0; board < 8; board += 1) {
+    const colors = tones[Math.floor(random() * tones.length)];
+    const joint = Math.floor(random() * 64);
+    for (let y = 0; y < 64; y += 1) {
+      for (let x = board * 8; x < board * 8 + 8; x += 1) {
+        const edge = x === board * 8;
+        img.set(x, y, edge ? '#1d140e' : pick(random, colors));
+      }
+      if (y === joint) for (let x = board * 8 + 1; x < board * 8 + 8; x += 1) img.set(x, y, '#261b12');
+    }
+    img.set(board * 8 + 2, (joint + 3) % 64, '#b08c5e');
+    img.set(board * 8 + 5, (joint + 61) % 64, '#a58256');
+  }
+  for (let i = 0; i < 26; i += 1) {
+    const x = Math.floor(random() * 64);
+    const y = Math.floor(random() * 64);
+    const length = 3 + Math.floor(random() * 9);
+    const color = pick(random, ['#2f231a', '#34402a', '#7a6650']);
+    for (let k = 0; k < length; k += 1) img.set(x, (y + k) % 64, color);
+  }
+  return img;
+}
+
+/** Assoalho escuro, tábuas na horizontal. */
+function floorBoards() {
+  const img = new Bitmap(64, 64);
+  const random = createRandom(137);
+  for (let y = 0; y < 64; y += 1) {
+    const board = Math.floor(y / 8);
+    for (let x = 0; x < 64; x += 1) {
+      const gap = y % 8 === 0 || (x + board * 23) % 48 === 0;
+      img.set(x, y, gap ? '#17100b' : pick(random, ['#3f2f22', '#453425', '#38291d', '#41301f']));
+    }
+  }
+  for (let i = 0; i < 90; i += 1) {
+    img.set(Math.floor(random() * 64), Math.floor(random() * 64), pick(random, ['#6b5a45', '#241a12', '#4d5138']));
+  }
+  return img;
+}
+
+/** Telhas de madeira sobrepostas, com musgo. */
+function shingles() {
+  const img = new Bitmap(64, 64);
+  const random = createRandom(139);
+  for (let y = 0; y < 64; y += 1) {
+    const row = Math.floor(y / 8);
+    for (let x = 0; x < 64; x += 1) {
+      const seam = (x + row * 4) % 8 === 0;
+      let colors = ['#33313a', '#3a3640', '#2e2c33'];
+      if (y % 8 >= 6 || seam) colors = ['#17161b', '#1c1a20'];
+      else if (random() < 0.07) colors = ['#34492f', '#3c5335'];
+      img.set(x, y, pick(random, colors));
+    }
+  }
+  return img;
+}
+
+/** Lombadas de livros em fileira. */
+function bookSpines() {
+  const img = new Bitmap(64, 64);
+  const random = createRandom(149);
+  let x = 0;
+  while (x < 64) {
+    const width = 3 + Math.floor(random() * 4);
+    const color = pick(random, ['#6e2f2a', '#2f4a45', '#7a6337', '#3a3556', '#5a4a3a', '#8a7a5c']);
+    for (let i = x; i < Math.min(64, x + width); i += 1) {
+      for (let y = 0; y < 64; y += 1) {
+        const band = y % 16 === 3 || y % 16 === 12;
+        img.set(i, y, i === x ? '#160f0c' : band ? '#b59a5e' : color);
+      }
+    }
+    x += width;
+  }
+  return img;
+}
+
+/** Folha amarelada com linhas de texto ilegível. */
+function paperSheet() {
+  const img = new Bitmap(32, 32);
+  const random = createRandom(151);
+  for (let y = 0; y < 32; y += 1) {
+    for (let x = 0; x < 32; x += 1) img.set(x, y, pick(random, ['#c9bd98', '#c2b58f', '#d1c6a4']));
+  }
+  for (let y = 4; y < 30; y += 4) {
+    for (let x = 3; x < 29; x += 1) if (random() < 0.72) img.set(x, y, '#4a3c2c');
+  }
+  img.rect(21, 22, 6, 5, '#8a3a30');
+  return img;
+}
+
+/** Retrato desbotado de três pessoas com os rostos riscados. */
+function portraitPicture() {
+  const img = new Bitmap(32, 32);
+  const random = createRandom(157);
+  for (let y = 0; y < 32; y += 1) {
+    for (let x = 0; x < 32; x += 1) img.set(x, y, pick(random, ['#7c7058', '#857860', '#746950']));
+  }
+  for (const [x, top, height] of [[6, 10, 22], [14, 6, 26], [23, 14, 18]]) {
+    img.rect(x - 1, top + 6, 6, height - 6, '#2c2519');
+    img.rect(x, top, 4, 6, '#b7a584');
+    img.line(x - 1, top, x + 5, top + 6, 1, '#120c08');
+    img.line(x + 4, top, x - 1, top + 5, 1, '#120c08');
+  }
+  img.rect(0, 0, 32, 2, '#3b2c1a');
+  img.rect(0, 30, 32, 2, '#3b2c1a');
+  return img;
+}
+
+/** Observadora: figura alta, encapuzada, de olhos pálidos. */
+function watcher() {
+  const img = new Bitmap(30, 56);
+  const random = createRandom(163);
+  for (let y = 3; y < 55; y += 1) {
+    let half;
+    if (y < 16) half = Math.round(6 * Math.sqrt(Math.max(0, 1 - ((y - 12) / 9) ** 2)));
+    else half = Math.round(5 + (y - 16) * 0.19 + Math.sin(y * 0.5));
+    const alpha = y < 40 ? 238 : Math.max(70, 238 - (y - 39) * 11);
+    for (let x = 15 - half; x < 15 + half; x += 1) {
+      if (y > 47 && (x % 4 === 0 || (x % 4 === 1 && y > 51))) continue;
+      const colors = x < 12 ? ['#4a5470', '#535e7c'] : x > 18 ? ['#232a40', '#293148'] : ['#343c58', '#3a4360'];
+      img.set(x, y, pick(random, colors), alpha);
+    }
+  }
+  // Mangas longas e mãos finas.
+  for (let i = 0; i < 22; i += 1) {
+    img.rect(8 - Math.floor(i / 6), 20 + i, 2, 1, '#535e7c');
+    img.rect(20 + Math.floor(i / 6), 20 + i, 2, 1, '#293148');
+  }
+  for (const x of [4, 6, 23, 25]) img.rect(x, 42, 1, 5, '#b9c2d6');
+  img.outline('#8d9ac0', 140);
+  // Interior do capuz e olhos.
+  img.rect(11, 7, 8, 10, '#05070e');
+  img.rect(12, 10, 2, 2, '#e9f4ff');
+  img.rect(16, 10, 2, 2, '#e9f4ff');
+  return img;
+}
+
+/** Instável: mancha fragmentada, de núcleo claro e pedaços soltos. */
+function wisp() {
+  const img = new Bitmap(26, 34);
+  const random = createRandom(167);
+  for (let y = 2; y < 32; y += 1) {
+    const wave = Math.round(Math.sin(y * 0.65) * 3);
+    const half = Math.max(1, Math.round(8 * Math.sin((Math.PI * (y - 1)) / 33) + random() * 2 - 1));
+    if (y % 7 === 5) continue; // cortes horizontais
+    for (let x = 13 + wave - half; x < 13 + wave + half; x += 1) {
+      const core = Math.abs(x - 13 - wave) < half * 0.45;
+      const colors = core ? ['#d9c8ff', '#e6dbff', '#bfe8e0'] : ['#7a52c0', '#6a45ad', '#3f8f8a'];
+      if (!core && random() < 0.18) continue;
+      img.set(x, y, pick(random, colors), core ? 235 : 190);
+    }
+  }
+  for (let i = 0; i < 22; i += 1) {
+    img.set(Math.floor(random() * 26), Math.floor(random() * 34), pick(random, ['#9d7ae0', '#6fd0c4']), 200);
+  }
+  img.rect(9, 11, 3, 2, '#12071f');
+  img.rect(15, 13, 2, 3, '#12071f');
+  img.rect(11, 18, 5, 1, '#12071f');
+  return img;
+}
+
 const ASSETS = {
+  'assets/textures/cabin/planks.png': planks,
+  'assets/textures/cabin/floor.png': floorBoards,
+  'assets/textures/cabin/roof.png': shingles,
+  'assets/textures/cabin/books.png': bookSpines,
+  'assets/textures/cabin/paper.png': paperSheet,
+  'assets/textures/cabin/portrait.png': portraitPicture,
+  'assets/sprites/entities/watcher_01.png': watcher,
+  'assets/sprites/entities/wisp_01.png': wisp,
   'assets/sprites/items/held_cross.png': heldCross,
   'assets/sprites/environment/tree_02.png': tallTree,
   'assets/sprites/environment/tree_small_01.png': smallTree,

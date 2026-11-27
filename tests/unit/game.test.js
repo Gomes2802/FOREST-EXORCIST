@@ -15,7 +15,7 @@ test('inicializa o jogo e monta a cena 3D', async (t) => {
   assert.equal(game.scene.activeCamera.name, 'player');
   assert.equal(game.scene.activeCamera.position.y, CONFIG.player.eyeHeight);
   assert.equal(game.scene.fogMode, BABYLON.Scene.FOGMODE_EXP2);
-  assert.deepEqual(game.scene.lights.map((l) => l.name), ['ambient', 'moonlight', 'lantern']);
+  assert.deepEqual(game.scene.lights.map((l) => l.name), ['ambient', 'moonlight', 'lantern', 'cabin:lamp']);
   assert.ok(game.scene.getMeshByName('ground:0,0'));
   assert.ok(game.scene.getMeshByName('moon'));
   const sprites = game.forest.billboards.reduce((sum, batch) => sum + batch.sprites.length, 0);

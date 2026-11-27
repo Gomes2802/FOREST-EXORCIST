@@ -30,8 +30,10 @@ export function viewAngle(viewer, point) {
  * @param {{ x: number, z: number }} spot
  * @param {{ viewer: { x: number, z: number, yaw: number, eyeHeight: number },
  *   world: { boundaryRadius: number, fogDensity: number, occluders: object[],
- *   blockers: object[] }, settings: object, previous?: { x: number, z: number } }} context
- *   occluders: sólidos; blockers: folhagem alta que esconde a visão.
+ *   blockers: object[], forbidden?: object[], others?: object[], separation?: number,
+ *   separationAngle?: number }, settings: object, previous?: { x: number, z: number } }} context
+ *   occluders: sólidos; blockers: folhagem alta que esconde a visão; forbidden:
+ *   áreas das construções; others: outras entidades presentes.
  */
 export function isValidSpawn(spot, { viewer, world, settings, previous = null }) {
   const distance = Math.hypot(spot.x - viewer.x, spot.z - viewer.z);
@@ -43,11 +45,7 @@ export function isValidSpawn(spot, { viewer, world, settings, previous = null })
   if (angle < settings.minViewAngle - 1e-9 || angle > settings.maxViewAngle + 1e-9) return false;
   if (previous && Math.hypot(spot.x - previous.x, spot.z - previous.z) < settings.minRespawnGap) return false;
 
-  const inside = (items, scale = 1) => items.some(
-    (o) => Math.hypot(spot.x - o.x, spot.z - o.z) < o.radius * scale + settings.clearance,
-  );
-  // Colada à folhagem pode; dentro do miolo dela, não.
-  if (inside(world.occluders) || inside(world.blockers, 0.6)) return false;
+  if (isOccupied(spot, { viewer, world, settings })) return false;
 
   // Linhas de visão dos olhos até o corpo (centro e lados) e a cabeça.
   const eye = { x: viewer.x, y: viewer.eyeHeight, z: viewer.z };
@@ -59,6 +57,49 @@ export function isValidSpawn(spot, { viewer, world, settings, previous = null })
     return !isBlocked(eye, point, world.occluders)
       && !isBlocked(eye, point, world.blockers, settings.foliageScale);
   });
+}
+
+/**
+ * O lugar está tomado: dentro de objeto, folhagem ou construção, ou perto demais
+ * (em distância ou na tela) de outra entidade.
+ */
+export function isOccupied(spot, { viewer, world, settings }) {
+  const inside = (items, scale = 1) => items.some(
+    (o) => o.radius !== undefined && Math.hypot(spot.x - o.x, spot.z - o.z) < o.radius * scale + settings.clearance,
+  );
+  // Colada à folhagem pode; dentro do miolo dela, não.
+  if (inside(world.occluders) || inside(world.blockers, 0.6)) return true;
+  const margin = settings.clearance;
+  if (world.forbidden?.some((area) => spot.x > area.minX - margin && spot.x < area.maxX + margin
+    && spot.z > area.minZ - margin && spot.z < area.maxZ + margin)) return true;
+  return Boolean(world.others?.some((other) => {
+    if (Math.hypot(spot.x - other.x, spot.z - other.z) < world.separation) return true;
+    // Uma atrás da outra, na tela, também conta como sobreposição.
+    const between = Math.atan2(other.x - viewer.x, other.z - viewer.z)
+      - Math.atan2(spot.x - viewer.x, spot.z - viewer.z);
+    return Math.abs(Math.atan2(Math.sin(between), Math.cos(between))) < world.separationAngle * DEGREES;
+  }));
+}
+
+/**
+ * Pontos especiais perto de construções (janelas e entrada). Valem se estiverem a
+ * uma distância razoável, no campo de visão e com a cabeça visível (por uma
+ * janela, por exemplo).
+ */
+export function isValidAnchor(anchor, { viewer, world, settings, previous = null }) {
+  const distance = Math.hypot(anchor.x - viewer.x, anchor.z - viewer.z);
+  const farthest = Math.min(settings.anchorMaxDistance, fogVisibleDistance(world.fogDensity, settings.minVisibility));
+  if (distance < settings.anchorMinDistance || distance > farthest) return false;
+  if (Math.hypot(anchor.x, anchor.z) > world.boundaryRadius - 1) return false;
+  const angle = viewAngle(viewer, anchor) / DEGREES;
+  if (angle < settings.anchorMinViewAngle || angle > settings.anchorViewAngle) return false;
+  if (previous && Math.hypot(anchor.x - previous.x, anchor.z - previous.z) < 1) return false;
+  // A vegetação já foi retirada destes pontos; objetos e outras entidades valem.
+  if (isOccupied(anchor, { viewer, world: { ...world, blockers: [] }, settings: { ...settings, clearance: 0.3 } })) {
+    return false;
+  }
+  const eye = { x: viewer.x, y: viewer.eyeHeight, z: viewer.z };
+  return [1.45, 1.75].some((height) => !isBlocked(eye, { x: anchor.x, y: height, z: anchor.z }, world.occluders));
 }
 
 /**

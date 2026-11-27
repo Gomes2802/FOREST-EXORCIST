@@ -19,7 +19,11 @@ async function ready(t) {
 test('a noite tem luz ambiente baixa, lua azulada e nenhuma sombra dinâmica', async (t) => {
   const { game } = await ready(t);
   const { ambient, moon } = game.lights;
-  assert.equal(game.scene.lights.length, 3);
+  // Três luzes externas e a lamparina da cabana (que só alcança o interior).
+  assert.equal(game.scene.lights.length, 4);
+  const lamp = game.scene.getLightByName('cabin:lamp');
+  assert.ok(lamp.includedOnlyMeshes.length > 0);
+  assert.ok(lamp.includedOnlyMeshes.every((m) => m.name.startsWith('cabin:')), 'a lamparina vaza para fora');
   assert.ok(ambient.intensity > 0.1 && ambient.intensity < 1);
   for (const light of [ambient, moon]) assert.ok(light.diffuse.b > light.diffuse.r, `${light.name} não é azulada`);
   assert.ok(moon.direction.y < 0);

@@ -3,9 +3,10 @@
 Terror sobrenatural em primeira pessoa, em uma floresta à noite, com pixel art
 em um ambiente 3D.
 
-**Estado atual: Etapa 5 (presença sobrenatural), versão 0.5.0.** Uma entidade
-aparece em pontos diferentes da floresta, observa o jogador, desaparece, reaparece
-e pode ser expulsa com a cruz. Ela não persegue nem ataca.
+**Estado atual: Etapas 6 e 9 (cabana abandonada e variedade sobrenatural), versão
+0.6.0.** Há uma cabana explorável na floresta e três entidades diferentes, que
+aparecem, observam, somem e podem ser expulsas com a cruz. Nenhuma persegue nem
+ataca. As Etapas 7 e 8 ainda não foram feitas.
 
 ## Como jogar (sem internet)
 
@@ -28,6 +29,7 @@ a aba e pressione `Ctrl+C` no terminal.
 | Mouse | Olhar |
 | `Shift` (segurar) | Correr |
 | Botão esquerdo (segurar) | Erguer a cruz |
+| `E` | Abrir ou fechar a porta, examinar objetos |
 | `F` | Ligar / desligar a lanterna |
 | `Esc` | Liberar o mouse e pausar |
 
@@ -59,60 +61,96 @@ Em endereços `file://`, o Chrome bloqueia módulos JavaScript (ES Modules) e o
 uso de imagens como texturas WebGL. Nesse caso a página mostra um aviso com a
 instrução acima. Não desative a segurança do navegador para contornar isso.
 
-## A entidade
+## A cabana
 
-Uma única entidade surge na floresta alguns segundos depois de começar. Ela aparece
-aos poucos, a 12–22 unidades, ao lado do centro do olhar (nunca no meio da mira),
-em lugar onde possa ser identificada. Depois observa, voltando-se devagar para você,
-some e reaparece em outro ponto, escolhido só depois de ela sumir.
+A sudoeste do ponto inicial há uma cabana abandonada. Siga a trilha para o sul e
+pegue a picada de terra que sai dela. Aproxime-se da porta e aperte `E`.
+
+- **Porta:** abre e fecha por dentro e por fora. Não termina de fechar enquanto
+  você estiver no vão.
+- **Interior:** mesa, cadeira, estante, armário, caixote, livros, papéis, um
+  retrato e uma lamparina.
+- **Examinar:** chegue perto, olhe para o objeto e aperte `E`. Há seis: papéis,
+  estante, armário, cadeira, retrato e caixote.
+- **Janelas:** são aberturas. Dá para ver (e ser visto) através delas, mas não
+  passar.
+
+| Ajuste (`src/config.js`) | Onde |
+| --- | --- |
+| Posição, tamanho, porta, janelas e telhado | `buildings[0]` |
+| Móveis, objetos examináveis e mensagens | `buildings[0].furniture`, `examinables` |
+| Lamparina e penumbra interna | `buildings[0].lamp`, `lighting.interiorColor` |
+| Tecla E: ângulo, tempos e textos | `interaction` |
+| Texturas (substituíveis, em potência de 2) | `assets/textures/cabin/`, `buildingMaterials` |
+
+Para criar outro tipo de construção, escreva uma função de planta como `planCabin`
+(`src/world/buildings/cabin.js`) e registre-a em `PLANNERS`
+(`src/world/buildings/index.js`). Colisões, porta, visão, interação e aparições já
+usam a planta.
+
+## As entidades
+
+| | Entidade (original) | Observadora | Instável |
+| --- | --- | --- | --- |
+| Aparência | vulto branco | figura alta, encapuzada | mancha violeta que pisca e salta |
+| Primeira aparição | ~6 s | ~30 s | ~50 s |
+| Distância ao surgir | 12–22 | 16–26 | 10–18 |
+| Fica presente | 6–14 s | 12–20 s | 3,5–6 s |
+| Intervalo | 8–18 s | 18–30 s | 14–26 s |
+| Foge se chegar a | 5 | 7 | 4 |
+| Exorcismo | 4 s | 5 s | 2,5 s |
+
+- **Original:** como antes, com três comportamentos que se alternam: parada (parte
+  quando o tempo acaba), tímida, azulada (some se encarada de perto por 3 s sem a
+  cruz) e esquiva, esverdeada (some se você desviar o olhar depois de vê-la).
+- **Observadora:** some se encarada de perto por 4,5 s sem a cruz. Quando **não
+  está sendo vista**, pode mudar para um ponto próximo (até duas vezes).
+- **Instável:** ao sumir, pode reaparecer logo em outro lugar (até duas vezes
+  seguidas).
+
+Todas voltam-se para você, não andam à vista e não bloqueiam a passagem. Perto da
+cabana, podem surgir diante de uma janela ou da entrada, principalmente a
+observadora.
+
+**Regras entre elas** (`encounters`): no máximo 2 presentes; ao menos 5 s entre
+aparições de entidades diferentes; nada novo durante um exorcismo; nunca
+sobrepostas; nunca dentro de objetos ou da cabana.
+
+Cada aparição segue os mesmos estados:
 
 | Estado | O que acontece | Passa para |
 | --- | --- | --- |
-| `dormant` | Invisível, esperando (8–18 s) | `appearing` |
-| `appearing` | Surge em 1,8 s; pode ser mirada a partir da metade | `watching`, `disappearing`, `exorcizing` |
-| `watching` | Observa por 6–14 s | `disappearing`, `exorcizing` |
-| `disappearing` | Some em 1,6 s (0,7 s se você chegar perto) | `dormant` |
+| `dormant` | Invisível, esperando | `appearing` |
+| `appearing` | Surgindo; pode ser mirada a partir da metade | `watching`, `disappearing`, `exorcizing` |
+| `watching` | Observando | `disappearing`, `exorcizing` |
+| `disappearing` | Sumindo | `dormant` |
 | `exorcizing` | Parada, sem poder sumir | `watching`, `exorcised` |
 | `exorcised` | Expulsa: não volta (só ao retornar ao menu) | — |
 
-Cada aparição tem um comportamento, que não se repete em seguida:
-
-| Comportamento | Cor | Some quando |
-| --- | --- | --- |
-| Parada | normal | o tempo acaba |
-| Tímida | azulada | é encarada a até 14 unidades por 3 s sem a cruz |
-| Esquiva | esverdeada | você desvia o olhar por 1,5 s depois de vê-la |
-
-Em qualquer um, ela também some se o tempo acabar, se você chegar a menos de 5
-unidades ou se afastar mais de 30. Interromper o exorcismo guarda o progresso
-(conforme a configuração) e dá 6 s de graça antes de ela poder partir.
-
-Ajustes em `haunting` (`src/config.js`): tempos (`first`, `interval`, `stay`,
-`appearTime`, `disappearTime`), distâncias (`minDistance`, `maxDistance`,
-`maxObserveDistance`, `fleeDistance`), neblina (`minVisibility`), ângulos, regras
-de visão (`sightPoints`, `foliageScale`, `fallbacks`), comportamentos (`moods`) e
-variação visual (`look`). Cores, rotação e flutuação ficam em `entity`.
+Um tipo novo é uma entrada em `entityTypes`: `visual` substitui valores de
+`entity`, `behavior` os de `haunting`, e `exorcism` define tempo e mensagem.
 
 ## Exorcismo
 
-1. Quando a entidade aparecer, aproxime-se: dentro do alcance (10), a mira vira um
-   losango vermelho.
+1. Quando uma entidade aparecer, aproxime-se: dentro do alcance (10), a mira vira
+   um losango vermelho.
 2. Segure o botão esquerdo para erguer a cruz e mantenha a mira sobre ela.
-3. Quando a barra se completar (4 segundos), a entidade é expulsa.
+3. Quando a barra se completar, a entidade é expulsa.
 
-Soltar o botão ou desviar a mira interrompe; o progresso fica guardado, inclusive
-se ela sumir e reaparecer. Troncos e pedras altas na frente a escondem da mira.
+Com duas por perto, só a que está na mira progride. Soltar o botão ou desviar a
+mira interrompe; o progresso fica guardado, inclusive se ela sumir e reaparecer.
+Troncos, pedras altas e paredes a escondem da mira; janelas e porta aberta não.
 
 | Ajuste (`src/config.js`) | Onde | Padrão |
 | --- | --- | --- |
-| Tempo de exorcismo (s) | `exorcism.duration` | 4 |
+| Tempo da original (s); cada tipo pode ter o seu | `exorcism.duration`, `entityTypes` | 4 |
 | Velocidade do progresso | `exorcism.speed` | 1 |
 | Alcance máximo | `exorcism.range` | 10 |
 | Quanto a cruz precisa estar erguida | `exorcism.requiredRaise` | 0,9 |
 | Perda por segundo ao interromper | `exorcism.decayPerSecond` | 0 (guarda) |
 | Obstáculos bloqueiam a mira | `exorcism.blockedByObstacles` | `true` |
 | Mensagem e clarão ao concluir | `exorcism.message`, `messageDuration`, `flash` | — |
-| Cruz: sprite, tamanho, posição, tempos | `exorcism.cross` | — |
+| Cruz: sprite, tamanho, posição, movimento da mão | `exorcism.cross` | — |
 
 Com a perda por segundo em 0,25, por exemplo, a barra esvazia em 4 s. Para trocar
 a cruz por um modelo, passe outra `createVisual` a `createCross`
@@ -120,15 +158,16 @@ a cruz por um modelo, passe outra `createVisual` a `createCross`
 
 ## Som
 
-**Passos:** `assets/sounds/footsteps/dirt_gravel.mp3` tem passos seguidos sobre terra
-e cascalho; cada um é um trecho da faixa (início em `audio.footsteps.steps`).
-Correndo, são mais frequentes e mais agudos. `npm run footsteps` recalcula os inícios.
+O jogo não depende de som. Há dois arquivos:
 
-**Entidade:** a estrutura existe (`src/audio/entitySounds.js`), mas **ainda não há
-arquivos**. Coloque-os em `assets/sounds/` e informe o caminho em `audio.entity`
-(`appear`, `presence` em laço, `vanish`, `exorcised`). Sem arquivo, nada é carregado.
+- `assets/sounds/footsteps/dirt_gravel.mp3`: passos; cada um é um trecho da faixa
+  (`audio.footsteps.steps`), mais frequentes e agudos na corrida.
+  `npm run footsteps` recalcula os inícios.
+- `assets/sounds/entity/exorcism.mp3`: toca em laço durante o exorcismo
+  (`audio.entity.exorcising`).
 
-O som só toca depois de um clique (exigência do navegador) e para na pausa e no menu.
+Os demais sons das entidades (`appear`, `presence`, `vanish`, `exorcised`) têm só a
+estrutura. O som toca depois de um clique e para na pausa e no menu.
 
 ## Substituir um sprite
 
@@ -152,8 +191,10 @@ Nenhum código precisa mudar.
 | `backdrop_01` | `environment/` | 256x64 | silhuetas do horizonte |
 | `shadow_01` | `environment/` | 32x32 | sombra no chão |
 | `ghost_01` | `entities/` | 28x40 | 2,5 |
+| `watcher_01` | `entities/` | 30x56 | 3,3 (observadora) |
+| `wisp_01` | `entities/` | 26x34 | 1,9 (instável) |
 | `cross` | `items/` | 16x24 | 1,5 (cruz fincada na trilha) |
-| `held_cross` | `items/` | 28x48 | cruz na mão do jogador |
+| `held_cross` | `items/` | 500x666 (reduzida a 128 de altura) | cruz na mão do jogador |
 
 O arquivo de cada um é o próprio ID com `.png`.
 
@@ -293,6 +334,47 @@ Em **Configurações → Qualidade gráfica**:
   ser fechada; para fixar uma, use `./start.sh --qualidade <nível>` ou o endereço
   `?qualidade=<nível>`.
 
+### Medições (v0.6.0, 27/11/2026)
+
+`npm run benchmark -- --seconds 10 --quality <nível> --scenarios
+floresta,exorcismo,cabana,entidades`, Chrome 158, Windows 10, 1280x720, no mesmo
+computador e no mesmo dia para as duas versões. Em software, média de duas
+medições; FPS médio e, entre parênteses, o 1% low.
+
+| Chrome | Cena | 0.5.0 | 0.6.0 |
+| --- | --- | --- | --- |
+| Software sem janela, Média | floresta | 31,8 (24,8) | 31,3 (18,5) |
+| | exorcismo | 31,4 (26,1) | 30,0 (22,9) |
+| | cabana | — | 27,1 (21,4) |
+| | três entidades | — | 29,7 (25,7) |
+| Software sem janela, Muito baixa | floresta | 37,3 (26,9) | 37,2 (23,5) |
+| | exorcismo | 36,5 (26,3) | 36,5 (27,8) |
+| | cabana | — | 33,9 (26,1) |
+| | três entidades | — | 36,2 (31,9) |
+| Software com janela, Média | floresta | 54,8 (36,2) | 54,0 (30,6) |
+| | exorcismo | 53,3 (38,5) | 51,6 (37,2) |
+| | cabana | — | 42,0 (32,5) |
+| | três entidades | — | 48,2 (39,4) |
+| Software com janela, Muito baixa | floresta | 72,7 (46,4) | 72,4 (40,8) |
+| | cabana | — | 59,8 (41,0) |
+| RTX 2060, Média (uma medição) | floresta | 180 (160) | 180 (163) |
+| | cabana | — | 180 (162) |
+
+- A média na floresta não mudou. O 1% low caiu ali por **um único quadro** de
+  ~60–70 ms (os piores normais são ~45 ms), na primeira vez que o interior da cabana
+  aparece na tela em software. Não depende de shaders nem do JavaScript, e o
+  aquecimento no carregamento não o eliminou.
+- Dentro da cabana é a cena mais pesada: cada pixel recebe a lamparina e a
+  lanterna. Na qualidade Média sem janela fica abaixo de 30 FPS; use a Muito baixa.
+- A cena passou de 460 para 492 malhas, de 14 para 27 materiais, de 3 para 4 luzes e
+  de 31 para até 40 chamadas de desenho com a cabana à vista.
+
+Otimizações desta versão: a floresta é desenhada até menos longe quando se está
+dentro de uma construção (tempo de desenho ali: de 15,3 para 14,3 ms); obstáculos do
+jogador guardados em lista; listas de visão e de construções reaproveitadas. As duas
+últimas não geraram diferença mensurável no tempo de JavaScript (~1,5 ms).
+
+
 ### Medições (v0.4.1, 26/11/2026)
 
 Medidas com `node tools/benchmark.mjs --seconds 10 --quality <nível>` (Chrome
@@ -373,14 +455,16 @@ src/
   world/                  forest.js (vegetação), environment.js (terreno, céu,
                           neblina), lighting.js (noite e lanterna), colliders.js
   player/                 player.js (movimento e colisões), cross.js (cruz)
-  entities/entity.js      máquina de estados e aparência da entidade
+  world/buildings/        index.js (montagem) e cabin.js (planta da cabana)
+  entities/entity.js      máquina de estados e aparência das entidades
   systems/                interaction.js (mira), exorcism.js (regras do exorcismo),
                           haunting.js (comportamento), spawn.js (onde aparecer)
-  audio/                  footsteps.js (passos), entitySounds.js (entidade)
+                          entityManager.js (tipos e limites), interact.js (tecla E)
+  audio/                  footsteps.js (passos), entitySounds.js (entidades)
   graphics/               pixelRenderer.js, spriteManager.js, materials.js,
                           batches.js (atlas e geometria agrupada)
   ui/                     menu.js (menu e pausa), hud.js (mira, barra, mensagem)
-assets/                   sprites/, textures/, sounds/footsteps/, models/
+assets/                   sprites/, textures/ (cabin/, ui/), sounds/, models/
 tools/                    build, cópia da biblioteca, provisórios, benchmark.mjs
 tests/                    unit/, browser/, real/, helpers/
 ```
@@ -423,20 +507,25 @@ Para distribuir uma versão, faça `git checkout v0.4.1`, `npm run build` e copi
 
 ## Limitações conhecidas
 
-- Há uma única entidade, que não persegue, não anda e não ataca; depois de expulsa,
-  só volta ao retornar ao menu.
+- Há três entidades; nenhuma persegue, anda à vista ou ataca. Depois de expulsas,
+  só voltam ao retornar ao menu.
 - A visão ao surgir é conferida contra troncos e uma aproximação da folhagem: em
   mata fechada ela pode aparecer parcialmente encoberta. Se o jogador estiver dentro
   da copa de uma árvore, ela surge ao lado, fora da parte visível.
-- Os sons da entidade têm só a estrutura, sem arquivos.
+- Só uma construção (a cabana), sem escadas, segundo andar ou móveis que se movem.
+- A luz da lamparina e a lanterna atravessam paredes (não há sombras dinâmicas).
+- A porta aberta não tem colisão própria: dá para atravessar a folha.
+- A vegetação em volta da cabana é plana e gira para a câmera.
 - A cruz é um sprite plano. No modo sem captura, arrastar para olhar também a
   ergue.
-- A mira considera apenas troncos, pedras e troncos caídos como bloqueio: copas e
-  arbustos não escondem a entidade.
+- A mira considera como bloqueio troncos, pedras, troncos caídos e paredes: copas,
+  arbustos e móveis não escondem uma entidade.
+- Em software, há um quadro mais lento na primeira vez que o interior da cabana
+  aparece na tela.
 - É necessário o servidor local; `file://` não funciona.
 - Sprites são planos voltados para a câmera (todos paralelos à tela, como em jogos
   clássicos); vistos de perto, não têm volume.
-- Sem sombras dinâmicas: a lanterna atravessa árvores e pedras.
+- Sem sombras dinâmicas: a lanterna atravessa árvores, pedras e paredes.
 - Sprites são iluminados como planos de frente para a câmera, sem volume.
 - Não há pulo, agachamento, gravidade nem relevo: o terreno é plano.
 - A borda da área explorável é invisível; as trilhas continuam na neblina além

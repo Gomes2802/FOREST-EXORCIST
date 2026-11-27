@@ -182,7 +182,7 @@ describe('Presença sobrenatural no Chrome', { skip }, () => {
     assert.deepEqual(result.after, result.before, 'recursos criados a cada aparição');
     assert.ok(result.appearances >= 5, `${result.appearances}`);
     assert.ok(result.draws <= 42, `${result.draws} chamadas de desenho`);
-    assert.equal(result.lights, 3);
+    assert.equal(result.lights, 4); // três externas e a lamparina da cabana
     assert.equal(result.glError, 0);
     assert.ok(result.fps > 10, `${result.fps} FPS`);
     noProblems();

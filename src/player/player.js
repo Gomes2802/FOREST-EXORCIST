@@ -60,6 +60,18 @@ export function createPlayer(BABYLON, scene, settings) {
   let speed = 0;
   let travelled = 0;
 
+  /** Malhas sólidas, guardadas para não varrer a cena inteira a cada passo. */
+  let obstacles = null;
+  const forget = () => {
+    obstacles = null;
+  };
+  scene.onNewMeshAddedObservable.add(forget);
+  scene.onMeshRemovedObservable.add(forget);
+
+  function refreshObstacles() {
+    obstacles ??= scene.meshes.filter((mesh) => mesh.metadata?.solidRadius || mesh.metadata?.solidBox);
+  }
+
   function step(intent, yaw) {
     const dt = settings.fixedStep;
     const target = desiredVelocity(intent, yaw, settings);
@@ -115,20 +127,30 @@ export function createPlayer(BABYLON, scene, settings) {
    * @returns {boolean} false se continuar dentro de algum obstáculo.
    */
   function pushOutOfObstacles() {
+    refreshObstacles();
     for (let attempt = 0; attempt <= PUSH_ATTEMPTS; attempt += 1) {
       let overlapping = false;
-      for (const mesh of scene.meshes) {
-        const solid = mesh.metadata?.solidRadius;
-        if (!solid || !mesh.checkCollisions) continue;
-        const dx = body.position.x - mesh.position.x;
-        const dz = body.position.z - mesh.position.z;
-        const minimum = solid + settings.radius;
+      for (const mesh of obstacles) {
+        if (!mesh.checkCollisions) continue;
+        const { solidRadius, solidBox } = mesh.metadata;
+        // Ponto do obstáculo a partir do qual se mede, e folga mínima até ele.
+        let fromX = mesh.position.x;
+        let fromZ = mesh.position.z;
+        let minimum = settings.radius;
+        if (solidBox) {
+          fromX = Math.max(solidBox.minX, Math.min(solidBox.maxX, body.position.x));
+          fromZ = Math.max(solidBox.minZ, Math.min(solidBox.maxZ, body.position.z));
+        } else {
+          minimum += solidRadius;
+        }
+        const dx = body.position.x - fromX;
+        const dz = body.position.z - fromZ;
         const distance = Math.hypot(dx, dz);
         if (distance >= minimum - 1e-4) continue;
         overlapping = true;
         if (attempt === PUSH_ATTEMPTS || distance === 0) return false;
-        body.position.x = mesh.position.x + (dx / distance) * minimum;
-        body.position.z = mesh.position.z + (dz / distance) * minimum;
+        body.position.x = fromX + (dx / distance) * minimum;
+        body.position.z = fromZ + (dz / distance) * minimum;
       }
       if (!overlapping) break;
     }

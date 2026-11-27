@@ -283,7 +283,9 @@ test('a interface recebe os estados certos', async (t) => {
     hud = state;
   };
   run(0.1);
-  assert.deepEqual(hud, { raised: false, aim: 'idle', progress: null, message: null, notice: null });
+  assert.deepEqual(hud, {
+    raised: false, aim: 'idle', progress: null, message: null, notice: null, prompt: null, note: null,
+  });
   face();
   assert.equal(hud.aim, 'target');
   assert.equal(hud.progress, null);

@@ -130,6 +130,27 @@ export function createSkyDomeMaterial(BABYLON, scene, name) {
   return material;
 }
 
+/**
+ * Material de uma parte de construção: textura repetida e tom por vértice. Com
+ * `ambient`, a penumbra interna é uma cor própria constante.
+ */
+export function createBuildingMaterial(BABYLON, scene, name, canvas, { pixelRenderer, ambient }) {
+  const material = new BABYLON.StandardMaterial(name, scene);
+  material.diffuseTexture = createPixelTexture(BABYLON, scene, canvas, pixelRenderer, 'surface');
+  material.specularColor = BABYLON.Color3.Black();
+  material.backFaceCulling = false;
+  if (ambient) material.emissiveColor = BABYLON.Color3.FromHexString(ambient);
+  return material;
+}
+
+/** Cor própria, sem luz (chama). A neblina continua valendo. */
+export function createGlowMaterial(BABYLON, scene, name, hexColor) {
+  const material = new BABYLON.StandardMaterial(name, scene);
+  material.disableLighting = true;
+  material.emissiveColor = BABYLON.Color3.FromHexString(hexColor);
+  return material;
+}
+
 /** Material de cor chapada que ignora luzes e neblina (lua). */
 export function createSkyMaterial(BABYLON, scene, name, hexColor) {
   const material = new BABYLON.StandardMaterial(name, scene);

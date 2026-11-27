@@ -12,6 +12,8 @@
  *   vazia      só o céu: todas as malhas desligadas (custo fixo do navegador e do motor)
  *   floresta   jogando, no ponto inicial
  *   exorcismo  diante da entidade, com a cruz erguida e o exorcismo em andamento
+ *   cabana     dentro da cabana, com a porta aberta, olhando em volta
+ *   entidades  as entidades presentes ao mesmo tempo, com a cruz erguida
  *
  * --setup "<código>" executa JavaScript na página antes da medição (experimentos;
  * "game" e "f" = game.forest estão disponíveis).
@@ -39,8 +41,16 @@ const mode = `${process.env.FE_VISIBLE ? 'janela' : 'sem janela'}, ${process.env
 const SETUP = {
   vazia: `game.player.teleport(0, 0);
     for (const mesh of game.scene.meshes) mesh.setEnabled(false);
-    game.forest.follow = () => {};`,
+    game.forest.follow = () => {};
+    if (game.buildings) game.buildings.follow = () => {};`,
   floresta: 'game.player.teleport(0, 0);',
+  cabana: `game.buildings.buildings[0].resetDoor(true);
+    game.player.teleport(-16, -12);`,
+  entidades: `game.player.teleport(0, 2);
+    game.entities.reset();
+    [[-3, 12], [3.5, 15], [0.3, 9]].forEach(([x, z], i) => game.entities.members[i].haunting.summon(x, z, { pinned: true }));
+    window.__holding = true;
+    game.input.isPrimaryHeld = true;`,
   exorcismo: `game.player.teleport(0.5, 6);
     // A entidade fica presente e parada no mesmo lugar em todas as versões.
     game.haunting?.summon(1.3, 11, { pinned: true });
@@ -87,15 +97,18 @@ try {
       let js = 0;
       const original = game.renderFrame.bind(game);
       game.renderFrame = () => { const t = performance.now(); original(); js += performance.now() - t; };
-      const turn = ${JSON.stringify(scenario)} === 'exorcismo' ? 0 : (2 * Math.PI) / ${seconds};
+      const turn = ['exorcismo', 'entidades'].includes(${JSON.stringify(scenario)}) ? 0 : (2 * Math.PI) / ${seconds};
       const intervals = [];
       let draws = 0, active = 0, last = performance.now();
       const start = last;
       while (last - start < ${seconds * 1000}) {
         game.view.look((turn / 60) / 0.0022, 0);
-        if (game.entity.progress > 0.6) {
-          game.entity.reset();
-          game.haunting?.summon(1.3, 11, { pinned: true });
+        // Reinicia antes de concluir, para o exorcismo continuar durante a medição.
+        for (const { entity, haunting } of game.entities?.members ?? [{ entity: game.entity, haunting: game.haunting }]) {
+          if (entity.progress <= 0.5) continue;
+          const { x, z } = entity.center;
+          entity.reset();
+          haunting?.summon(x, z, { pinned: true });
         }
         if (window.__holding) game.input.isPrimaryHeld = true;
         await new Promise(requestAnimationFrame);

@@ -7,20 +7,41 @@
 
 /**
  * Há obstáculo entre os olhos e o ponto atingido? (função pura)
- * Cada obstáculo é um cilindro vertical { x, z, radius, height }; `scale`
- * multiplica os raios.
+ * Cada obstáculo é um cilindro vertical { x, z, radius, height } (`scale`
+ * multiplica os raios) ou uma caixa { minX, maxX, minY, maxY, minZ, maxZ }.
  */
 export function isBlocked(origin, point, occluders, scale = 1) {
   const dx = point.x - origin.x;
   const dz = point.z - origin.z;
   const length2 = dx * dx + dz * dz;
   if (length2 === 0) return false;
-  return occluders.some(({ x, z, radius, height }) => {
+  return occluders.some((occluder) => {
+    if (occluder.minX !== undefined) return crossesBox(origin, point, occluder);
+    const { x, z, radius, height } = occluder;
     const t = ((x - origin.x) * dx + (z - origin.z) * dz) / length2;
     if (t <= 0 || t >= 1) return false;
     if (Math.hypot(origin.x + dx * t - x, origin.z + dz * t - z) >= radius * scale) return false;
     return origin.y + (point.y - origin.y) * t < height;
   });
+}
+
+/** O segmento entre os dois pontos atravessa a caixa? (método das faixas) */
+function crossesBox(from, to, box) {
+  let enter = 0;
+  let leave = 1;
+  for (const [axis, min, max] of [['x', box.minX, box.maxX], ['y', box.minY, box.maxY], ['z', box.minZ, box.maxZ]]) {
+    const delta = to[axis] - from[axis];
+    if (Math.abs(delta) < 1e-9) {
+      if (from[axis] < min || from[axis] > max) return false;
+      continue;
+    }
+    const a = (min - from[axis]) / delta;
+    const b = (max - from[axis]) / delta;
+    enter = Math.max(enter, Math.min(a, b));
+    leave = Math.min(leave, Math.max(a, b));
+    if (enter >= leave) return false;
+  }
+  return leave > 1e-6 && enter < 1 - 1e-6;
 }
 
 /**

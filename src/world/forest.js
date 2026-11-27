@@ -12,6 +12,7 @@
  * O terreno e o horizonte ficam em environment.js.
  */
 import { createColliders, solidCircles } from './colliders.js';
+import { planBuildings } from './buildings/index.js';
 import { createEnvironment, createRandom, createValueNoise, distanceToPaths } from './environment.js';
 import { createLogMaterial, createShadowMaterial, createSpriteMaterial } from '../graphics/materials.js';
 import { buildAtlas, createBillboardBatch, createChunkedBatch } from '../graphics/batches.js';
@@ -87,8 +88,20 @@ export function planForest(settings, idsByGroup, describe = () => UNKNOWN_SPRITE
 
 /** Respeita as trilhas e o ponto inicial. */
 function fits(placement, circles, layer, settings, describe) {
-  const { paths, pathHalfWidth, spawnClearing } = settings;
+  const { paths, pathHalfWidth, spawnClearing, exclusions = [] } = settings;
   const [x, , z] = placement.position;
+  // Nada nasce dentro das construções nem encostado nelas (a imagem atravessaria
+  // a parede). A grama pode chegar mais perto.
+  const reach = placement.kind === 'grass' ? 0.35
+    : (describe(placement.sprite).worldWidth * placement.scale * placement.stretch) / 2;
+  const tooClose = (px, pz, radius) => exclusions.some((area) => {
+    const dx = Math.max(area.minX - px, 0, px - area.maxX);
+    const dz = Math.max(area.minZ - pz, 0, pz - area.maxZ);
+    const margin = placement.kind === 'grass' ? Math.min(area.margin, 0.35) : area.margin;
+    return Math.hypot(dx, dz) < margin + radius;
+  });
+  if (tooClose(x, z, reach)) return false;
+  if (circles.some((c) => tooClose(c.x, c.z, c.radius))) return false;
   for (const circle of circles) {
     if (distanceToPaths(circle.x, circle.z, paths) - circle.radius < pathHalfWidth) return false;
     if (Math.hypot(circle.x, circle.z) - circle.radius < spawnClearing) return false;
@@ -113,14 +126,17 @@ export function visibleDistance(environment, fogDensity) {
  * ver e o limite do nível de qualidade.
  * @param {object} detail nível de qualidade (CONFIG.graphics.presets)
  */
-export function drawDistances(environment, fogDensity, detail) {
+export function drawDistances(environment, fogDensity, detail, indoors = false) {
   const fog = visibleDistance(environment, fogDensity);
-  const far = Math.min(fog, detail.spriteDistance);
+  // Dentro de uma construção, a floresta só aparece pelas janelas e pela porta.
+  const limit = indoors ? environment.culling.indoor : null;
+  const pick = (key) => Math.min(detail[key], limit?.[key] ?? Infinity);
+  const far = Math.min(fog, pick('spriteDistance'));
   return {
     far,
-    near: Math.min(far, detail.smallDistance),
-    grass: Math.min(far, detail.grassDistance),
-    shadows: Math.min(far, detail.shadowDistance),
+    near: Math.min(far, pick('smallDistance')),
+    grass: Math.min(far, pick('grassDistance')),
+    shadows: Math.min(far, pick('shadowDistance')),
   };
 }
 
@@ -158,7 +174,8 @@ export async function createForest(BABYLON, scene, {
   ]);
 
   const describe = (id) => spriteManager.get(id);
-  const placements = planForest(settings, (group) => spriteManager.idsByGroup(group), describe);
+  const exclusions = planBuildings(config).flatMap((plan) => plan.exclusions);
+  const placements = planForest({ ...settings, exclusions }, (group) => spriteManager.idsByGroup(group), describe);
   const ofKind = (kind) => placements.filter((p) => p.kind === kind);
   const trees = placements.filter((p) => TREE_GROUPS.includes(describe(p.sprite).definition.group));
 
@@ -364,12 +381,12 @@ export async function createForest(BABYLON, scene, {
    * Desliga o desenho do que está escondido pela neblina, longe demais para o
    * nível de qualidade ou fora da vista. Colisões e mira não mudam.
    */
-  function cull(position, rotation) {
-    distances = drawDistances(config.environment, scene.fogDensity, current);
+  function cull(position, rotation, indoors) {
+    distances = drawDistances(config.environment, scene.fogDensity, current, indoors);
     Object.assign(view, { x: position.x, z: position.z, yaw: rotation?.y ?? 0, pitch: rotation?.x ?? 0 });
     for (const batch of billboards) batch.update(view, distances);
 
-    const key = JSON.stringify(distances);
+    const key = `${distances.far}|${distances.near}|${distances.grass}|${distances.shadows}`;
     const moved = Math.hypot(position.x - culled.x, position.z - culled.z);
     if (moved < config.environment.culling.step && key === culled.key) return;
     Object.assign(culled, { x: position.x, z: position.z, key });
@@ -414,11 +431,12 @@ export async function createForest(BABYLON, scene, {
     /**
      * @param {{ x: number, y: number, z: number }} position câmera
      * @param {{ x: number, y: number }} [rotation] pitch e yaw da câmera
+     * @param {boolean} [indoors] jogador dentro de uma construção
      */
-    follow(position, rotation) {
+    follow(position, rotation, indoors = false) {
       if (disposed) return;
       environment.follow(position);
-      cull(position, rotation);
+      cull(position, rotation, indoors);
     },
     dispose() {
       disposed = true;

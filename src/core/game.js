@@ -9,8 +9,9 @@ import { createForest } from '../world/forest.js';
 import { applyAtmosphere } from '../world/environment.js';
 import { createPlayer } from '../player/player.js';
 import { createCross, createSpriteCrossVisual } from '../player/cross.js';
-import { createEntity } from '../entities/entity.js';
-import { createHaunting } from '../systems/haunting.js';
+import { createEntityManager } from '../systems/entityManager.js';
+import { createBuildings, insideBuilding } from '../world/buildings/index.js';
+import { createInteractions } from '../systems/interact.js';
 import { createEntitySounds } from '../audio/entitySounds.js';
 import { createTargeting } from '../systems/interaction.js';
 import { createExorcism } from '../systems/exorcism.js';
@@ -22,7 +23,7 @@ import { createFootsteps } from '../audio/footsteps.js';
 export class Game {
   constructor({
     BABYLON, canvas, config, spriteManager, pixelRenderer, createEngine, input, footsteps,
-    sounds, random = Math.random,
+    sounds, random = Math.random, entityTypes,
   }) {
     if (!BABYLON) throw new Error('Babylon.js não foi carregado (lib/babylon.js).');
     this.BABYLON = BABYLON;
@@ -38,8 +39,14 @@ export class Game {
     this.player = null;
     this.view = null;
     this.lights = null;
-    this.entity = null;
-    this.haunting = null;
+    /** Gerenciador das entidades (systems/entityManager.js). */
+    this.entities = null;
+    /** Limita os tipos criados (testes); undefined = todos de CONFIG.entityTypes. */
+    this.entityTypes = entityTypes;
+    this.buildings = null;
+    /** Portas abertas: sobrevive à recriação da cena. */
+    this.openDoors = new Set();
+    this.interactions = null;
     this.random = random;
     this.sounds = sounds ?? createEntitySounds(config.audio.entity);
     this.cross = null;
@@ -47,7 +54,8 @@ export class Game {
     this.exorcism = null;
     /** Entidade sob a mira, ou null. */
     this.target = null;
-    /** Segundos restantes da mensagem de conclusão. */
+    /** Mensagem de conclusão e quantos segundos ainda fica na tela. */
+    this.message = null;
     this.messageTime = 0;
     /** Chamado a cada atualização com o estado da interface (ver ui/hud.js). */
     this.onHud = () => {};
@@ -90,13 +98,16 @@ export class Game {
 
       await this.spriteManager.loadManifest(config.assets.spriteManifest);
       this.forest = await this.#buildForest();
+      this.buildings = await this.#buildStructures();
       await this.#buildEncounter();
       await this.footsteps.load();
       await this.sounds.load();
       await this.#warmUp();
       this.input.onPauseRequest = () => this.pause();
       this.input.onAction = (action) => {
-        if (action === 'lantern' && this.mode === 'playing') this.lights.flashlight.toggle();
+        if (this.mode !== 'playing') return;
+        if (action === 'lantern') this.lights.flashlight.toggle();
+        else if (action === 'interact') this.interactions.use(this.player.position);
       };
       this.input.attach();
       this.state = 'ready';
@@ -135,13 +146,18 @@ export class Game {
       this.footsteps.update(this.player);
       this.view.update(delta, this.player);
       this.#updateExorcism(delta);
-      this.haunting.update(delta, this.#viewer());
+      this.#updateInteraction(delta);
+      this.entities.update(delta, this.#viewer());
       this.#updateAutoQuality(delta);
     } else if (this.mode === 'menu') {
       this.view.updateIdle(delta, this.player.position);
     }
-    // Pausado, a entidade também fica imóvel.
-    if (this.mode !== 'paused') this.entity.update(delta);
+    // Pausado, entidades, porta e chama também ficam imóveis.
+    if (this.mode !== 'paused') {
+      this.entities.animate(delta);
+      const { x, z } = this.player.body.position;
+      this.buildings.animate(delta, { x, z, radius: this.config.player.radius });
+    }
     this.#followPlayer();
     this.onHud(this.#hudState());
   }
@@ -191,8 +207,9 @@ export class Game {
     this.lights.flashlight.reset();
     this.player.reset();
     this.view.reset(this.player.position);
-    this.entity.reset();
-    this.haunting.reset();
+    this.entities.reset();
+    for (const building of this.buildings.buildings) building.resetDoor(false);
+    this.interactions.reset();
     this.sounds.event('reset');
     this.cross.reset();
     this.exorcism.reset();
@@ -201,6 +218,15 @@ export class Game {
     this.notice = null;
     this.#followPlayer();
     this.onHud(this.#hudState());
+  }
+
+  /** A entidade original e o seu comportamento. */
+  get entity() {
+    return this.entities?.get('ghost')?.entity ?? null;
+  }
+
+  get haunting() {
+    return this.entities?.get('ghost')?.haunting ?? null;
   }
 
   /** Nível de qualidade em uso (CONFIG.graphics.presets). */
@@ -316,25 +342,20 @@ export class Game {
     this.onModeChange({ mode, control, notice });
   }
 
-  /** Cria a entidade e o seu comportamento, a cruz e as regras do exorcismo. */
+  /** Cria as entidades e o comportamento, a cruz e as regras do exorcismo. */
   async #buildEncounter() {
     const { BABYLON, scene, config, spriteManager, pixelRenderer } = this;
-    const { entity, exorcism } = config;
-    await spriteManager.loadAll([entity.sprite, exorcism.cross.sprite]);
+    const { exorcism } = config;
+    const sprites = config.entityTypes.map((type) => type.visual?.sprite ?? config.entity.sprite);
+    await spriteManager.loadAll([...new Set([...sprites, exorcism.cross.sprite])]);
     const assets = { spriteManager, pixelRenderer };
-    this.entity = createEntity(BABYLON, scene, { settings: entity, timing: config.haunting, ...assets });
-    this.haunting = createHaunting({
-      entity: this.entity,
-      settings: config.haunting,
+    this.entities = createEntityManager(BABYLON, scene, {
+      config,
       random: this.random,
+      types: this.entityTypes,
       onEvent: (name) => this.sounds.event(name),
-      world: () => ({
-        boundaryRadius: config.player.boundaryRadius,
-        paths: config.forest.paths,
-        fogDensity: this.scene.fogDensity,
-        occluders: this.forest.occluders,
-        blockers: this.forest.blockers,
-      }),
+      world: () => this.#entityWorld(),
+      ...assets,
     });
     this.cross = createCross(BABYLON, scene, this.view.camera, {
       settings: exorcism.cross,
@@ -343,6 +364,55 @@ export class Game {
     });
     this.targeting = createTargeting(BABYLON, exorcism);
     this.exorcism = createExorcism(exorcism);
+    this.interactions = createInteractions({
+      settings: config.interaction,
+      playerRadius: config.player.radius,
+      buildings: () => this.buildings,
+    });
+  }
+
+  /**
+   * Tudo o que esconde uma entidade: troncos, pedras e paredes. A lista é
+   * reaproveitada enquanto a floresta e as portas não mudam.
+   */
+  #occluders() {
+    const { forest } = this;
+    const { buildings } = this.buildings;
+    const cache = this.occluderCache;
+    // Cada construção devolve a mesma lista enquanto a porta não muda de lado.
+    if (cache && cache.forest === forest && cache.walls.length === buildings.length
+      && buildings.every((building, i) => building.occluders === cache.walls[i])) return cache.all;
+    const walls = buildings.map((building) => building.occluders);
+    const all = [...forest.occluders, ...walls.flat()];
+    this.occluderCache = { forest, walls, all };
+    return all;
+  }
+
+  /** A floresta vista pelas entidades. */
+  #entityWorld() {
+    const { config, buildings } = this;
+    if (this.structureAreas?.buildings !== buildings) {
+      this.structureAreas = {
+        buildings,
+        forbidden: buildings.plans.map((plan) => plan.footprint),
+        anchors: buildings.plans.flatMap((plan) => plan.anchors),
+      };
+    }
+    return {
+      boundaryRadius: config.player.boundaryRadius,
+      paths: config.forest.paths,
+      fogDensity: this.scene.fogDensity,
+      occluders: this.#occluders(),
+      blockers: this.forest.blockers,
+      forbidden: this.structureAreas.forbidden,
+      anchors: this.structureAreas.anchors,
+    };
+  }
+
+  /** O que está ao alcance da tecla E. */
+  #updateInteraction(delta) {
+    const { camera } = this.view;
+    this.interactions.update(delta, camera.position, viewDirection(camera.rotation.y, camera.rotation.x));
   }
 
   /** Mira, cruz e progresso; só durante o jogo. */
@@ -354,32 +424,37 @@ export class Game {
     this.target = this.targeting.find(
       camera.position,
       viewDirection(camera.rotation.y, camera.rotation.x),
-      [this.entity],
-      this.forest.occluders,
+      this.entities.entities,
+      this.#occluders(),
     );
     const expelled = this.exorcism.update(delta, { holding, readyTime, target: this.target });
     if (expelled) {
       this.sounds.event('exorcised');
       this.target = null;
+      this.message = expelled.expelledMessage ?? this.config.exorcism.message;
       this.messageTime = this.config.exorcism.messageDuration;
     }
-    this.cross.setExorcising(this.entity.state === 'exorcizing');
-    this.sounds.setExorcising(this.entity.state === 'exorcizing');
+    const exorcising = Boolean(this.entities.exorcizing);
+    this.cross.setExorcising(exorcising);
+    this.sounds.setExorcising(exorcising);
   }
 
   #hudState() {
-    const { entity, target, config } = this;
-    const aimed = Boolean(target?.isTargetable);
-    const exorcising = entity.state === 'exorcizing';
+    const { target, config } = this;
+    const aimed = target?.isTargetable ? target : null;
+    // A barra mostra a que está sendo exorcizada; sem isso, a que está na mira.
+    const exorcizing = this.entities?.exorcizing ?? null;
+    const focus = exorcizing ?? aimed;
     let aim = 'idle';
-    if (aimed) aim = exorcising ? 'exorcising' : 'target';
-    const showProgress = entity.isTargetable && entity.progress > 0 && (aimed || exorcising);
+    if (aimed) aim = exorcizing === aimed ? 'exorcising' : 'target';
     return {
       raised: this.cross.amount >= config.exorcism.requiredRaise,
       aim,
-      progress: showProgress ? entity.progress : null,
-      message: this.messageTime > 0 ? config.exorcism.message : null,
+      progress: focus?.isTargetable && focus.progress > 0 ? focus.progress : null,
+      message: this.messageTime > 0 ? this.message : null,
       notice: this.notice?.text ?? null,
+      prompt: this.interactions.prompt,
+      note: this.interactions.message,
     };
   }
 
@@ -391,19 +466,31 @@ export class Game {
   async #warmUp() {
     const { camera } = this.view;
     const forward = viewDirection(camera.rotation.y, 0);
-    this.entity.mesh.position.set(camera.position.x + forward.x * 6, 0, camera.position.z + forward.z * 6);
-    this.entity.mesh.setEnabled(true);
+    const entities = this.entities.entities;
+    for (const { mesh } of entities) {
+      mesh.position.set(camera.position.x + forward.x * 6, 0, camera.position.z + forward.z * 6);
+      mesh.setEnabled(true);
+    }
     this.cross.root.setEnabled(true);
+    // As construções são desenhadas uma vez mesmo fora da vista.
+    const structures = this.buildings.meshes;
+    for (const mesh of structures) {
+      mesh.setEnabled(true);
+      mesh.alwaysSelectAsActiveMesh = true;
+    }
     // A entidade é desenhada com escala igual e diferente por eixo (a postura de
     // cada aparição): o Babylon.js usa um shader para cada caso.
     for (const [sx, sy] of [[1, 1], [1.05, 1.1]]) {
-      this.entity.mesh.scaling.set(sx, sy, 1);
-      await this.#waitForShaders([this.entity.mesh, this.cross.mesh]);
+      for (const { mesh } of entities) mesh.scaling.set(sx, sy, 1);
+      await this.#waitForShaders([...entities.map((e) => e.mesh), this.cross.mesh, ...structures]);
       this.scene.render();
     }
     // Devolve o que o estado atual manda desenhar.
-    this.entity.redraw();
+    for (const mesh of structures) mesh.alwaysSelectAsActiveMesh = false;
+    for (const entity of entities) entity.redraw();
     this.cross.redraw();
+    this.buildings.follow({ x: Infinity, z: Infinity }, 0);
+    this.#followPlayer();
   }
 
   /**
@@ -422,7 +509,11 @@ export class Game {
   #followPlayer() {
     const { camera } = this.view;
     this.lights.flashlight.follow(camera);
-    this.forest?.follow(camera.position, camera.rotation);
+    if (!this.forest) return;
+    const { x, z } = camera.position;
+    const indoors = Boolean(this.buildings) && insideBuilding(this.buildings.plans, x, z);
+    this.forest.follow(camera.position, camera.rotation, indoors);
+    this.buildings?.follow(camera.position, this.forest.distances.far);
   }
 
   resize() {
@@ -450,7 +541,10 @@ export class Game {
       const previous = this.forest;
       this.forest = await this.#buildForest();
       previous.dispose();
-      this.entity.refresh();
+      const structures = this.buildings;
+      this.buildings = await this.#buildStructures();
+      structures.dispose();
+      this.entities.refresh();
       this.cross.refresh();
       this.#followPlayer();
       await this.#warmUp();
@@ -476,6 +570,16 @@ export class Game {
       pixelRenderer: this.pixelRenderer,
       lights: this.lights,
       detail: this.detail,
+    });
+  }
+
+  #buildStructures() {
+    return createBuildings(this.BABYLON, this.scene, {
+      config: this.config,
+      spriteManager: this.spriteManager,
+      pixelRenderer: this.pixelRenderer,
+      lights: this.lights,
+      openDoors: this.openDoors,
     });
   }
 

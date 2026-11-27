@@ -45,6 +45,9 @@ export function createFootstepRecorder() {
 export function createGame({
   loadImage = loadImageFromDisk, createEngine = createNullEngine, lock, footsteps = createFootstepRecorder(),
   random = createRandom(7),
+  // Os testes das etapas anteriores usam só a entidade original; os da Etapa 9
+  // passam `entityTypes: null` (todos os tipos).
+  entityTypes = ['ghost'],
 } = {}) {
   const pixelRenderer = new PixelRenderer(CONFIG.pixel, { createCanvas });
   const logger = createLogger();
@@ -53,7 +56,7 @@ export function createGame({
   const input = new InputController(dom);
   const game = new Game({
     BABYLON, canvas: null, config: CONFIG, spriteManager, pixelRenderer, createEngine, input, footsteps,
-    random,
+    random, entityTypes: entityTypes ?? undefined,
   });
   const changes = [];
   game.onModeChange = (change) => changes.push(change);

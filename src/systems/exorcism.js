@@ -31,7 +31,8 @@ export function createExorcism(settings) {
         return null;
       }
       touched = next;
-      if (!next.advance((readyTime * settings.speed) / settings.duration)) return null;
+      // Cada tipo de entidade pode pedir um tempo diferente.
+      if (!next.advance((readyTime * settings.speed) / (next.exorcismDuration ?? settings.duration))) return null;
       active = null;
       touched = null;
       return next;

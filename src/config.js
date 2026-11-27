@@ -4,7 +4,7 @@
  * assets/sprites/manifest.json (dados, sem código).
  */
 export const CONFIG = deepFreeze({
-  version: '0.5.0',
+  version: '0.6.0',
 
   display: {
     /** Resolução de referência. O canvas se adapta à janela. */
@@ -111,6 +111,15 @@ export const CONFIG = deepFreeze({
     spriteManifest: 'assets/sprites/manifest.json',
     groundTexture: 'assets/textures/ground.png',
     pathTexture: 'assets/textures/path.png',
+    /** Texturas das construções (substituíveis, como o chão). */
+    buildingTextures: {
+      planks: 'assets/textures/cabin/planks.png',
+      floor: 'assets/textures/cabin/floor.png',
+      roof: 'assets/textures/cabin/roof.png',
+      books: 'assets/textures/cabin/books.png',
+      paper: 'assets/textures/cabin/paper.png',
+      portrait: 'assets/textures/cabin/portrait.png',
+    },
   },
 
   lighting: {
@@ -133,6 +142,8 @@ export const CONFIG = deepFreeze({
     },
     /** Cor da noite aplicada aos sprites (somada à lanterna). */
     spriteTint: '#53628f',
+    /** Penumbra dentro das construções (além da lamparina e da lanterna). */
+    interiorColor: '#2a2f45',
   },
 
   environment: {
@@ -168,6 +179,10 @@ export const CONFIG = deepFreeze({
       smallHeight: 1.5,
       /** Tamanho das regiões de grama e de sombras, em unidades. */
       grassChunk: 12, shadowChunk: 20,
+      /** Limites da floresta enquanto o jogador está dentro de uma construção. */
+      indoor: { spriteDistance: 30, smallDistance: 15, grassDistance: 9, shadowDistance: 12 },
+      /** O interior das construções só é desenhado até esta distância. */
+      interiorDistance: 22,
     },
   },
 
@@ -218,7 +233,176 @@ export const CONFIG = deepFreeze({
     idleSwayPeriod: 18,
   },
 
-  /** Aparência da entidade. */
+  /** Textura usada por cada parte das construções. */
+  buildingMaterials: {
+    outside: 'planks', inside: 'planks', door: 'planks', wood: 'planks',
+    floor: 'floor', roof: 'roof', books: 'books', paper: 'paper', portrait: 'portrait',
+  },
+
+  /**
+   * Construções da floresta. As posições `at` são relativas ao centro: [x, z] nos
+   * móveis e [x, altura, z] nos objetos examináveis e na lamparina.
+   */
+  buildings: [
+    {
+      id: 'cabin',
+      type: 'cabin',
+      seed: 41,
+      /** A sudoeste do início: fora da vista de quem começa olhando para o norte. */
+      center: [-17, -12],
+      size: [6, 5],
+      wallHeight: 2.7,
+      wallThickness: 0.2,
+      /** Porta na parede leste; reach: alcance da tecla E; speed: segundos. */
+      door: { width: 1.3, height: 2.2, openAngle: 1.75, speed: 0.5, reach: 2.6 },
+      windows: [
+        { wall: 'north', offset: -0.6, width: 1.2, bottom: 0.95, top: 1.95 },
+        { wall: 'south', offset: 0.5, width: 1.2, bottom: 0.95, top: 1.95 },
+        { wall: 'west', offset: -0.4, width: 1.1, bottom: 0.95, top: 1.95 },
+      ],
+      roof: { overhang: 0.45, rise: 1.5 },
+      /** Faixa sem vegetação em volta (soma-se à largura de cada imagem). */
+      clearing: 1.2,
+      anchorClearing: 1.4,
+      /** Onde uma entidade pode aparecer: fora das janelas e diante da porta. */
+      anchorDistance: 2.4,
+      entranceDistance: 5,
+      lamp: { at: [-2.0, 1.02, 1.55], color: '#ffb866', glow: '#ffd08a', intensity: 0.9, range: 7, flicker: 0.07 },
+      furniture: [
+        { type: 'table', at: [-1.85, 1.65], size: [1.5, 0.9], height: 0.82, solid: true },
+        { type: 'chair', at: [-1.75, 0.55], size: [0.55, 0.55], height: 1.1, solid: true },
+        { type: 'shelf', at: [-1.9, -2.08], size: [1.6, 0.42], height: 2.05, solid: true },
+        { type: 'wardrobe', at: [1.6, 1.97], size: [1.15, 0.6], height: 2.05, solid: true },
+        { type: 'crate', at: [2.15, -1.8], size: [0.8, 0.8], height: 0.7, solid: true },
+        { type: 'papers', at: [-1.55, 1.55], size: [0.7, 0.5], height: 0.82 },
+        { type: 'books', at: [2.15, -1.8], size: [0.4, 0.3], height: 0.7 },
+        { type: 'portrait', at: [-2.76, 0.65], size: [0.07, 0.7], height: 1.6 },
+      ],
+      examinables: [
+        {
+          id: 'papers', name: 'os papéis', at: [-1.55, 0.9, 1.55],
+          message: '"Ela olha de volta quando a encaro. Com a cruz erguida, não foge."',
+        },
+        {
+          id: 'shelf', name: 'a estante', at: [-1.9, 1.2, -1.9],
+          message: 'Livros inchados de umidade. Alguém marcou à força a página de uma oração.',
+        },
+        {
+          id: 'wardrobe', name: 'o armário', at: [1.6, 1.25, 1.65],
+          message: 'Vazio, exceto por um casaco que ainda cheira a fumaça.',
+        },
+        {
+          id: 'chair', name: 'a cadeira', at: [-1.75, 0.7, 0.55],
+          message: 'Afastada da mesa, como se alguém tivesse se levantado às pressas.',
+        },
+        {
+          id: 'portrait', name: 'o retrato', at: [-2.7, 1.6, 0.65],
+          message: 'Uma família diante desta cabana. Os rostos foram riscados.',
+        },
+        {
+          id: 'crate', name: 'o caixote', at: [2.15, 0.85, -1.8],
+          message: 'Velas gastas e um terço partido. Quem morou aqui também tentou expulsar algo.',
+        },
+      ],
+    },
+  ],
+
+  /** Interação com a tecla E. */
+  interaction: {
+    /** Ângulo máximo entre o centro da tela e o objeto, em graus. */
+    angle: 32,
+    /** Distância até a construção a partir da qual se procura algo. */
+    nearby: 9,
+    messageDuration: 5.5,
+    prompts: { open: 'Abrir a porta', close: 'Fechar a porta', examine: 'Examinar' },
+    blockedDoor: 'Saia do vão para fechar a porta.',
+  },
+
+  /** Regras entre entidades. */
+  encounters: {
+    /** Presentes ao mesmo tempo, no máximo. */
+    maxActive: 2,
+    /** Segundos entre aparições de entidades diferentes. */
+    minGap: 5,
+    /** Distância e ângulo (graus, vistos pelo jogador) mínimos entre duas. */
+    separation: 9,
+    separationAngle: 18,
+  },
+
+  /**
+   * Tipos de entidade. `visual` substitui valores de `entity`, `behavior` os de
+   * `haunting`, e `exorcism` os de `exorcism`.
+   */
+  entityTypes: [
+    /** A original: usa os valores gerais. */
+    { id: 'ghost', name: 'Entidade', behavior: { anchorChance: 0.25 } },
+    {
+      /** Aparece mais longe, observa por muito tempo e muda de lugar sem ser vista. */
+      id: 'watcher',
+      name: 'Observadora',
+      visual: {
+        sprite: 'watcher_01',
+        hover: 0.05,
+        turnSpeed: 0.55,
+        moodTints: { shy: '#e8ecff' },
+        float: { amplitude: 0.025, period: 6 },
+        stare: { period: 8, duration: 2.2, stretch: 0.05 },
+        effects: { shake: 0.04, flicker: 0.25 },
+      },
+      behavior: {
+        first: { delay: 30 },
+        interval: { min: 18, max: 30 },
+        stay: { min: 12, max: 20 },
+        appearTime: 3,
+        disappearTime: 2,
+        minDistance: 16,
+        maxDistance: 26,
+        minVisibility: 0.12,
+        maxObserveDistance: 34,
+        fleeDistance: 7,
+        moods: { shy: 1 },
+        shyDistance: 15,
+        shyAfter: 4.5,
+        look: { opacity: [0.85, 1], scale: [0.95, 1.08] },
+        anchorChance: 0.75,
+        relocate: { max: 2, wait: 2.5, unseenFor: 1, minStep: 3, maxStep: 7, hiddenAngle: 62 },
+      },
+      exorcism: { duration: 5, message: 'A observadora foi expulsa.' },
+    },
+    {
+      /** Aparições curtas, aos saltos; ao sumir, pode voltar logo em outro ponto. */
+      id: 'unstable',
+      name: 'Instável',
+      visual: {
+        sprite: 'wisp_01',
+        hover: 0.45,
+        turnSpeed: 3,
+        moodTints: { still: '#ffffff' },
+        float: { amplitude: 0.18, period: 1.4 },
+        stare: { period: 2, duration: 0.5, stretch: 0.18 },
+        effects: { shake: 0.12, flicker: 0.45, pulseSpeed: 17, jitter: 0.14, jitterRate: 9, idleFlicker: 0.45 },
+      },
+      behavior: {
+        first: { delay: 50 },
+        interval: { min: 14, max: 26 },
+        stay: { min: 3.5, max: 6 },
+        appearTime: 0.9,
+        disappearTime: 0.8,
+        fleeDisappearTime: 0.4,
+        minDistance: 10,
+        maxDistance: 18,
+        fleeDistance: 4,
+        moods: { still: 1 },
+        resumeGrace: 4,
+        look: { opacity: [0.75, 0.95], scale: [0.85, 1.15] },
+        anchorChance: 0.2,
+        blink: { chance: 0.65, max: 2, delay: { min: 0.7, max: 1.6 } },
+      },
+      exorcism: { duration: 2.5, message: 'A presença instável se desfez.' },
+    },
+  ],
+
+  /** Aparência da entidade (padrão; cada tipo pode substituir). */
   entity: {
     sprite: 'ghost_01',
     /** Altura em que flutua acima do chão. */
@@ -303,6 +487,17 @@ export const CONFIG = deepFreeze({
     lookAwayAfter: 1.5,
     /** Tempo de graça depois de um exorcismo interrompido. */
     resumeGrace: 6,
+    /**
+     * Aparições junto a construções (janelas e entrada): chance por tipo
+     * (anchorChance), distâncias aceitas e fuga mais curta, pois há uma parede.
+     */
+    anchorChance: 0,
+    anchorMinDistance: 3.5,
+    anchorMaxDistance: 18,
+    /** Menor que o das aparições comuns: há parede e moldura no caminho. */
+    anchorMinViewAngle: 7,
+    anchorViewAngle: 60,
+    anchorFleeDistance: 2.8,
     /** Intervalo entre verificações de visão e passo fixo da lógica. */
     senseInterval: 0.1,
     step: 1 / 60,
@@ -371,6 +566,11 @@ export const CONFIG = deepFreeze({
       {
         halfWidth: 1.2,
         points: [[0.8, 14], [7, 16.5], [13, 13], [19, 6], [27, 5], [35, 10], [45, 8], [54, 12]],
+      },
+      // Picada até a porta da cabana.
+      {
+        halfWidth: 1,
+        points: [[-1.5, -13], [-4.5, -10.8], [-8, -10.6], [-11, -12.3], [-13.4, -12]],
       },
     ],
     /** Faixa sempre livre de cada lado do centro das trilhas. */

@@ -15,16 +15,21 @@ export class Hud {
     this.fill = document.getElementById('exorcism-fill');
     this.message = document.getElementById('hud-message');
     this.notice = document.getElementById('hud-notice');
+    this.prompt = document.getElementById('interact-prompt');
+    this.promptText = document.getElementById('interact-text');
+    this.note = document.getElementById('interact-message');
     this.flash = flash ? document.getElementById('hud-flash') : null;
     this.last = {};
   }
 
   /**
    * @param {{ raised: boolean, aim: 'idle'|'target'|'exorcising',
-   *   progress: number|null, message: string|null, notice?: string|null }} state
-   *   notice: aviso discreto (ex.: qualidade gráfica reduzida).
+   *   progress: number|null, message: string|null, notice?: string|null,
+   *   prompt?: string|null, note?: string|null }} state
+   *   notice: aviso discreto (ex.: qualidade gráfica reduzida); prompt: ação
+   *   disponível na tecla E; note: o que se descobriu ao examinar.
    */
-  render({ raised, aim, progress, message, notice = null }) {
+  render({ raised, aim, progress, message, notice = null, prompt = null, note = null }) {
     const percent = progress === null ? null : Math.floor(progress * 100);
     this.#changed('raised', raised, () => {
       this.indicator.hidden = !raised;
@@ -43,6 +48,16 @@ export class Hud {
       this.message.hidden = !message;
       this.message.textContent = message ?? '';
       if (this.flash) this.flash.hidden = !message;
+    });
+    this.#changed('prompt', prompt, () => {
+      if (!this.prompt) return;
+      this.prompt.hidden = !prompt;
+      this.promptText.textContent = prompt ?? '';
+    });
+    this.#changed('note', note, () => {
+      if (!this.note) return;
+      this.note.hidden = !note;
+      this.note.textContent = note ?? '';
     });
     this.#changed('notice', notice, () => {
       if (!this.notice) return;

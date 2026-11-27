@@ -160,5 +160,7 @@ test('as colisões continuam depois de recriar a floresta', async () => {
   await game.setSpriteResolution(0.5);
   await game.setSpriteResolution(1);
   assert.equal(game.forest.colliders.length, count);
-  assert.equal(game.scene.meshes.filter((m) => m.checkCollisions).length, count);
+  // Etapa 6: além dos obstáculos da floresta, as caixas das construções.
+  const buildings = game.buildings.buildings.reduce((sum, b) => sum + b.colliders.length, 0);
+  assert.equal(game.scene.meshes.filter((m) => m.checkCollisions).length, count + buildings);
 });

@@ -130,7 +130,7 @@ export function createEntityState({ appearTime = 1.8, disappearTime = 1.6, targe
 
 /** Cria a entidade na cena. O sprite precisa estar carregado no spriteManager. */
 export function createEntity(BABYLON, scene, {
-  settings, timing, spriteManager, pixelRenderer,
+  id = 'ghost', settings, timing, spriteManager, pixelRenderer,
 }) {
   const entity = createEntityState(timing);
   const baseReset = entity.reset;
@@ -142,7 +142,7 @@ export function createEntity(BABYLON, scene, {
 
   const record = spriteManager.get(settings.sprite);
   const mesh = BABYLON.MeshBuilder.CreatePlane(
-    'entity',
+    `entity:${id}`,
     { width: record.worldWidth, height: record.worldHeight },
     scene,
   );
@@ -155,7 +155,7 @@ export function createEntity(BABYLON, scene, {
   const hitHeight = record.worldHeight * settings.hitbox.height;
   const hitRadius = (record.worldWidth * settings.hitbox.width) / 2;
   const hitbox = BABYLON.MeshBuilder.CreateCylinder(
-    'entity:hitbox',
+    `entity:${id}:hitbox`,
     { diameter: hitRadius * 2, height: hitHeight, tessellation: 10 },
     scene,
   );
@@ -205,11 +205,20 @@ export function createEntity(BABYLON, scene, {
     const staring = state === WATCHING && phase < 1 ? Math.sin(phase * Math.PI) : 0;
     const leaving = state === DISAPPEARING ? 1 - presence : 0;
 
+    // Instabilidade (só em alguns tipos): saltos bruscos de posição e brilho.
+    const { jitter = 0, jitterRate = 1, idleFlicker = 0 } = effects;
+    const frame = Math.floor(time * jitterRate);
+    const noise = (seed) => {
+      const value = Math.sin((frame + seed) * 12.9898) * 43758.5453;
+      return value - Math.floor(value) - 0.5;
+    };
+    const twitch = jitter && !exorcising && state !== EXORCISED ? noise(1) * jitter * 2 : 0;
+
     mesh.position.set(
-      spot.x + Math.sin(time * 47) * shake,
+      spot.x + Math.sin(time * 47) * shake + twitch * Math.cos(yaw),
       settings.hover + Math.sin((time / float.period) * Math.PI * 2) * float.amplitude
         + gone * fadeRise + leaving * fadeRise * 0.4,
-      spot.z,
+      spot.z - twitch * Math.sin(yaw),
     );
     mesh.rotation.y = yaw;
     // Ao partir, a figura se estica para cima e afina.
@@ -218,7 +227,7 @@ export function createEntity(BABYLON, scene, {
       look.scale * (1 + gone * 0.35 + staring * stare.stretch),
       1,
     );
-    const flicker = exorcising ? pulse * effects.flicker : 0;
+    const flicker = exorcising ? pulse * effects.flicker : Math.abs(noise(7)) * idleFlicker;
     mesh.visibility = presence * look.opacity * (1 - gone) * (1 - flicker);
 
     const calm = moodColors.get(mood) ?? white;
@@ -236,8 +245,12 @@ export function createEntity(BABYLON, scene, {
   apply();
 
   return Object.defineProperties(entity, Object.getOwnPropertyDescriptors({
+    id,
     mesh,
     hitbox,
+    /** Segundos de exorcismo deste tipo (undefined = o geral). */
+    exorcismDuration: undefined,
+    expelledMessage: undefined,
     /** Ponto central, usado para mirar e para descartar o que está longe. */
     get center() {
       return center;

@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.6.0 — 2026-11-27
+
+Etapas 6 (construções abandonadas) e 9 (variedade sobrenatural). As Etapas 7 e 8
+não foram feitas.
+
+### Adicionado
+
+- Cabana abandonada explorável, com porta, janelas, telhado, móveis, objetos,
+  lamparina e picada até a entrada (`world/buildings/`).
+- Tecla `E`: abrir e fechar a porta e examinar seis objetos (`systems/interact.js`).
+- Duas entidades novas: observadora (aparece longe, muda de lugar sem ser vista) e
+  instável (aparições curtas, oscila e reaparece aos saltos).
+- Gerenciador de entidades com limite de presentes, intervalo entre aparições, sem
+  sobreposição (`systems/entityManager.js`).
+- Aparições diante de janelas e da entrada da cabana.
+- Cenários `cabana` e `entidades` no benchmark.
+
+### Alterado
+
+- Paredes bloqueiam passagem, visão e mira; janelas e porta aberta deixam ver.
+- Exorcismo com tempo e mensagem por tipo de entidade.
+- Dentro da cabana, a floresta é desenhada até menos longe (só se vê pelas janelas).
+
+### Desempenho
+
+- Obstáculos do jogador guardados em lista, em vez de varrer a cena a cada passo.
+- Menos trabalho repetido por quadro na floresta, na mira e na interação.
+
+### Incluído desde a 0.5.0
+
+- Som em laço durante o exorcismo.
+- Nova arte da cruz na mão, sem tonalidade, com movimento de mola.
+
 ## 0.5.0 — 2026-11-26
 
 Etapa 5: inteligência e comportamento sobrenatural.
