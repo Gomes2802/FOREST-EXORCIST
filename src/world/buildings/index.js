@@ -10,6 +10,10 @@
  * o que está longe não é desenhado.
  */
 import { planCabin } from './cabin.js';
+import {
+  documentItem, documentParts, documentPoint, outdoorPaint,
+} from './clues.js';
+import { createGeometry } from './geometry.js';
 import { createBuildingMaterial, createGlowMaterial } from '../../graphics/materials.js';
 import { createRandom } from '../environment.js';
 import { touchesBox } from '../../systems/interact.js';
@@ -20,8 +24,6 @@ const PLANNERS = { cabin: planCabin };
 const INTERIOR = new Set(['inside', 'floor', 'wood', 'books', 'paper', 'portrait']);
 /** Materiais de objetos pequenos: cada face mostra a imagem inteira. */
 const WHOLE_IMAGE = new Set(['paper', 'portrait']);
-/** Repetição da textura por unidade do mundo (64 px = 4 unidades, como os sprites). */
-const UV_SCALE = 0.25;
 /** Quanto a porta precisa estar aberta para deixar passar e deixar ver. */
 const PASSABLE = 0.6;
 const SEE_THROUGH = 0.35;
@@ -30,7 +32,13 @@ export function planBuildings(config) {
   return (config.buildings ?? []).map((settings) => {
     const planner = PLANNERS[settings.type];
     if (!planner) throw new Error(`Tipo de construção desconhecido: "${settings.type}".`);
-    return { ...planner(settings), settings };
+    const plan = { ...planner(settings), settings };
+    // Os documentos desta construção respondem à tecla E como os demais objetos.
+    plan.documents = (config.investigation?.documents ?? [])
+      .filter((doc) => doc.place.building === plan.id)
+      .map((doc) => ({ ...doc, point: documentPoint(doc, plan.center) }));
+    plan.interactables.push(...plan.documents.map((doc) => documentItem(doc, doc.point, config.investigation.reach)));
+    return plan;
   });
 }
 
@@ -38,59 +46,6 @@ export function planBuildings(config) {
 export function insideBuilding(plans, x, z, margin = 0) {
   return plans.some(({ footprint }) => x >= footprint.minX - margin && x <= footprint.maxX + margin
     && z >= footprint.minZ - margin && z <= footprint.maxZ + margin);
-}
-
-/** Acumula caixas e quadriláteros em um único conjunto de vértices. */
-function createGeometry() {
-  const positions = [];
-  const normals = [];
-  const uvs = [];
-  const colors = [];
-  const indices = [];
-
-  /** Quadrilátero com cantos em ordem; UVs em unidades do mundo (u, v). */
-  function quad(corners, normal, coordinates, shade) {
-    const first = positions.length / 3;
-    corners.forEach((corner, i) => {
-      positions.push(...corner);
-      normals.push(...normal);
-      uvs.push(coordinates[i][0] * UV_SCALE, coordinates[i][1] * UV_SCALE);
-      colors.push(shade, shade, shade, 1);
-    });
-    indices.push(first, first + 1, first + 2, first, first + 2, first + 3);
-  }
-
-  return {
-    quad,
-    /**
-     * Faces de uma caixa. `faces` filtra por direção (ex.: só a que olha para
-     * fora). Direções: '+x', '-x', '+y', '-y', '+z', '-z'. Com `whole`, a imagem
-     * é esticada em cada face em vez de se repetir pelo mundo.
-     */
-    box(b, shade = 1, faces = () => true, whole = false) {
-      const { minX: x0, maxX: x1, minY: y0, maxY: y1, minZ: z0, maxZ: z1 } = b;
-      const sides = [
-        ['+x', [1, 0, 0], [[x1, y0, z0], [x1, y0, z1], [x1, y1, z1], [x1, y1, z0]], (p) => [p[2], p[1]]],
-        ['-x', [-1, 0, 0], [[x0, y0, z1], [x0, y0, z0], [x0, y1, z0], [x0, y1, z1]], (p) => [p[2], p[1]]],
-        ['+y', [0, 1, 0], [[x0, y1, z0], [x1, y1, z0], [x1, y1, z1], [x0, y1, z1]], (p) => [p[0], p[2]]],
-        ['-y', [0, -1, 0], [[x0, y0, z1], [x1, y0, z1], [x1, y0, z0], [x0, y0, z0]], (p) => [p[0], p[2]]],
-        ['+z', [0, 0, 1], [[x1, y0, z1], [x0, y0, z1], [x0, y1, z1], [x1, y1, z1]], (p) => [p[0], p[1]]],
-        ['-z', [0, 0, -1], [[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0]], (p) => [p[0], p[1]]],
-      ];
-      const full = [[0, 0], [1, 0], [1, 1], [0, 1]].map((uv) => uv.map((v) => v / UV_SCALE));
-      for (const [name, normal, corners, map] of sides) {
-        if (faces(name)) quad(corners, normal, whole ? full : corners.map(map), shade);
-      }
-    },
-    toMesh(BABYLON, scene, name) {
-      if (positions.length === 0) return null;
-      const mesh = new BABYLON.Mesh(name, scene);
-      const data = new BABYLON.VertexData();
-      Object.assign(data, { positions, normals, uvs, colors, indices });
-      data.applyToMesh(mesh);
-      return mesh;
-    },
-  };
 }
 
 /** Telhado de duas águas, com beirais, e os triângulos de madeira nas pontas. */
@@ -170,6 +125,13 @@ function buildGeometry(plan) {
       geometry[part.material].box(part, part.shade, undefined, WHOLE_IMAGE.has(part.material));
     }
   }
+  // Documentos da construção (dentro ou fora): somam-se às malhas que já
+  // existem, sem nenhuma chamada de desenho a mais.
+  for (const doc of plan.documents) {
+    for (const part of documentParts(doc, doc.point)) {
+      geometry[part.material].box(part.box, part.shade, undefined, WHOLE_IMAGE.has(part.material));
+    }
+  }
   addRoof(plan, geometry);
   return geometry;
 }
@@ -196,10 +158,9 @@ export async function createBuildings(BABYLON, scene, {
       const image = images[config.buildingMaterials[name]];
       const canvas = pixelRenderer.pixelate(image, { powerOfTwo: true });
       const interior = INTERIOR.has(name);
-      const material = createBuildingMaterial(BABYLON, scene, `building:${name}`, canvas, {
-        pixelRenderer,
-        ambient: interior ? config.lighting.interiorColor : null,
-      });
+      let ambient = interior ? config.lighting.interiorColor : null;
+      if (name === 'clue') ambient = config.lighting.clueGlow;
+      const material = createBuildingMaterial(BABYLON, scene, `building:${name}`, canvas, { pixelRenderer, ambient });
       materials.set(name, material);
       disposables.push(material);
     }
@@ -344,6 +305,27 @@ export async function createBuildings(BABYLON, scene, {
     };
   });
 
+  // Pistas na floresta (as das construções já estão nas malhas delas).
+  const { documents = [], reach, drawDistance } = config.investigation ?? {};
+  const outdoor = documents.filter((doc) => !doc.place.building)
+    .map((doc) => ({ doc, point: documentPoint(doc) }));
+  const propMeshes = outdoor.map(({ doc, point }) => {
+    const geometry = createGeometry();
+    for (const part of documentParts(doc, point)) {
+      const { color, image } = outdoorPaint(part);
+      geometry.box(part.box, color, undefined, image);
+    }
+    const mesh = geometry.toMesh(BABYLON, scene, `clue:${doc.id}`);
+    mesh.material = materialFor('clue');
+    mesh.parent = root;
+    mesh.isPickable = false;
+    mesh.renderingGroupId = 1;
+    mesh.freezeWorldMatrix();
+    mesh.metadata = { center: point };
+    return mesh;
+  });
+  const props = outdoor.map(({ doc, point }) => documentItem(doc, point, reach));
+
   const culled = { x: Infinity, z: Infinity, far: 0 };
   let disposed = false;
 
@@ -351,9 +333,13 @@ export async function createBuildings(BABYLON, scene, {
     root,
     plans,
     buildings,
+    /** Documentos na floresta que respondem à tecla E. */
+    props,
+    /** Uma malha pequena por pista na floresta. */
+    propMeshes,
     /** Todas as malhas visíveis (para preparar os shaders no carregamento). */
     get meshes() {
-      return buildings.flatMap((b) => b.meshes);
+      return [...buildings.flatMap((b) => b.meshes), ...propMeshes];
     },
     animate(dt, player) {
       for (const building of buildings) building.animate(dt, player);
@@ -372,6 +358,11 @@ export async function createBuildings(BABYLON, scene, {
           const visible = building.interiorMeshes.includes(mesh) || mesh === building.flame ? inside : outside;
           if (mesh.isEnabled(false) !== visible) mesh.setEnabled(visible);
         }
+      }
+      for (const mesh of propMeshes) {
+        const { x, z } = mesh.metadata.center;
+        const visible = Math.hypot(x - position.x, z - position.z) <= Math.min(far, drawDistance);
+        if (mesh.isEnabled(false) !== visible) mesh.setEnabled(visible);
       }
     },
     dispose() {

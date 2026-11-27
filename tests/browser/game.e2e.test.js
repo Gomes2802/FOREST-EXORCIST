@@ -101,7 +101,7 @@ describe('Forest Exorcist no Chrome', { skip }, () => {
     assert.equal(info.rendering, 'pixelated');
     assert.deepEqual(info.client, [1280, 720]);
     const frame = await sampleScene();
-    assert.deepEqual([frame.width, frame.height], [640, 360]);
+    assert.deepEqual([frame.width, frame.height], [853, 480]);
     assert.equal(frame.glError, 0);
     assert.ok(frame.colors > 100, `cena quase vazia: ${frame.colors} cores`);
     assert.equal(frame.magenta, 0);
@@ -253,14 +253,14 @@ describe('Forest Exorcist no Chrome', { skip }, () => {
         sprites: game.forest.billboards.reduce((n, b) => n + b.visibleCount, 0) };
     })()`);
     const initial = await read();
-    assert.deepEqual([initial.quality, initial.level, initial.size, initial.menuQuality], ['auto', 'medio', [640, 360], 'auto']);
+    assert.deepEqual([initial.quality, initial.level, initial.size, initial.menuQuality], ['auto', 'medio', [853, 480], 'auto']);
     await page.click('[data-screen="main"] [data-action="settings"]');
     const change = (name, value) => page.evaluate(`(() => {
       const select = document.querySelector('[data-setting="${name}"]');
       select.value = '${value}';
       select.dispatchEvent(new Event('change', { bubbles: true }));
     })()`);
-    for (const [quality, size, scale] of [['muito-baixo', [426, 240], '3'], ['baixo', [512, 288], '2.5'], ['alto', [640, 360], '2']]) {
+    for (const [quality, size, scale] of [['muito-baixo', [426, 240], '3'], ['baixo', [512, 288], '2.5'], ['alto', [853, 480], '1.5']]) {
       await change('quality', quality);
       const now = await read();
       assert.deepEqual([now.level, now.size, now.menuScale], [quality, size, scale]);

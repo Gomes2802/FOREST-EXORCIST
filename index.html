@@ -37,7 +37,7 @@
       </nav>
       <p class="hint"><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> andar &middot;
         <kbd>Shift</kbd> correr &middot; mouse olhar<br>
-        segure o botão esquerdo: cruz &middot; <kbd>E</kbd> interagir &middot; <kbd>F</kbd> lanterna &middot; <kbd>Esc</kbd> pausar</p>
+        segure o botão esquerdo: cruz &middot; <kbd>E</kbd> interagir &middot; <kbd>J</kbd> caderno &middot; <kbd>F</kbd> lanterna &middot; <kbd>Esc</kbd> pausar</p>
       <p id="menu-status" class="status" role="status">Carregando...</p>
     </section>
 
@@ -56,7 +56,8 @@
         <label>Resolução da imagem
           <select data-setting="renderScale">
             <option value="1">1280x720 (mais pesado)</option>
-            <option value="2">640x360 (padrão)</option>
+            <option value="1.5">853x480 (Média e Alta)</option>
+            <option value="2">640x360</option>
             <option value="2.5">512x288 (econômica)</option>
             <option value="3">426x240 (emergência)</option>
             <option value="4">320x180 (mínima)</option>
@@ -112,10 +113,40 @@
       <p id="hud-notice" role="status" hidden></p>
       <p id="interact-prompt" hidden><kbd>E</kbd> <span id="interact-text"></span></p>
       <p id="interact-message" role="status" hidden></p>
+      <p id="hud-toast" role="status" hidden></p>
       <div id="drag-help" hidden>
         <p class="hud-hint">Mouse não capturado: segure o botão esquerdo e arraste para olhar.
-          <kbd>E</kbd> interagir, <kbd>F</kbd> lanterna, <kbd>Esc</kbd> pausa.</p>
+          <kbd>E</kbd> interagir, <kbd>J</kbd> caderno, <kbd>F</kbd> lanterna, <kbd>Esc</kbd> pausa.</p>
         <button type="button" class="hud-button" data-action="pause">PAUSAR</button>
+      </div>
+    </section>
+
+    <section class="screen screen--notebook" data-screen="notebook" aria-label="Caderno e documentos" hidden>
+      <div id="notebook" data-view="journal">
+        <header>
+          <h2>CADERNO</h2>
+          <button type="button" data-action="close-notebook">FECHAR</button>
+        </header>
+        <div id="notebook-index">
+          <h3>Objetivos</h3>
+          <ul id="objective-list"></ul>
+          <h3>Registros <span id="record-count"></span></h3>
+          <p id="record-empty" class="hint">Nada encontrado ainda. Procure papéis e marcas pela mata.</p>
+          <ul id="record-list"></ul>
+          <h3>Descobertas</h3>
+          <p id="discovery-empty" class="hint">Nenhuma anotação.</p>
+          <ul id="discovery-list"></ul>
+        </div>
+        <article id="page" tabindex="0">
+          <p id="page-kind"></p>
+          <h3 id="page-title"></h3>
+          <p id="page-meta"></p>
+          <div id="page-text"></div>
+        </article>
+        <p class="hint" id="notebook-help-journal"><kbd>&uarr;</kbd> <kbd>&darr;</kbd> escolher registro &middot;
+          <kbd>J</kbd> ou <kbd>Esc</kbd> fechar</p>
+        <p class="hint" id="notebook-help-reading"><kbd>E</kbd> ou <kbd>Esc</kbd> fechar &middot;
+          para reler, abra o caderno (<kbd>J</kbd>)</p>
       </div>
     </section>
 
@@ -130,8 +161,8 @@
         <button type="button" data-action="back">MENU PRINCIPAL</button>
       </div>
       <p class="hint"><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> andar &middot;
-        <kbd>Shift</kbd> correr &middot; botão esquerdo: cruz &middot; <kbd>E</kbd> interagir &middot; <kbd>F</kbd> lanterna &middot;
-        <kbd>Esc</kbd> libera o mouse e pausa</p>
+        <kbd>Shift</kbd> correr &middot; botão esquerdo: cruz &middot; <kbd>E</kbd> interagir &middot; <kbd>J</kbd> caderno &middot;
+        <kbd>F</kbd> lanterna &middot; <kbd>Esc</kbd> libera o mouse e pausa</p>
     </section>
   </div>
 </body>

@@ -3,8 +3,13 @@
  * Ajustes visuais e de cena ficam aqui; a lista de sprites fica em
  * assets/sprites/manifest.json (dados, sem código).
  */
+import { INVESTIGATION } from './content/investigation.js';
+
 export const CONFIG = deepFreeze({
-  version: '0.6.0',
+  version: '0.7.0',
+
+  /** Etapa 7: documentos, objetivos e descobertas (src/content/investigation.js). */
+  investigation: INVESTIGATION,
 
   display: {
     /** Resolução de referência. O canvas se adapta à janela. */
@@ -144,6 +149,8 @@ export const CONFIG = deepFreeze({
     spriteTint: '#3b4766',
     /** Penumbra dentro das construções (além da lamparina e da lanterna). */
     interiorColor: '#1c2030',
+    /** Brilho próprio, fraco, das pistas ao ar livre: achá-las sem a lanterna. */
+    clueGlow: '#2b2a24',
   },
 
   environment: {
@@ -237,6 +244,8 @@ export const CONFIG = deepFreeze({
   buildingMaterials: {
     outside: 'planks', inside: 'planks', door: 'planks', wood: 'planks',
     floor: 'floor', roof: 'roof', books: 'books', paper: 'paper', portrait: 'portrait',
+    /** Pistas ao ar livre (uma textura clara; o tom vem de cada peça). */
+    clue: 'paper',
   },
 
   /**
@@ -314,7 +323,7 @@ export const CONFIG = deepFreeze({
     /** Distância até a construção a partir da qual se procura algo. */
     nearby: 9,
     messageDuration: 5.5,
-    prompts: { open: 'Abrir a porta', close: 'Fechar a porta', examine: 'Examinar' },
+    prompts: { open: 'Abrir a porta', close: 'Fechar a porta', examine: 'Examinar', read: 'Ler' },
     blockedDoor: 'Saia do vão para fechar a porta.',
   },
 

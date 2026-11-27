@@ -19,7 +19,7 @@ export const KEY_BINDINGS = Object.freeze({
 });
 
 /** Teclas de ação: disparam uma vez por pressionamento. */
-export const ACTION_BINDINGS = Object.freeze({ KeyF: 'lantern', KeyE: 'interact' });
+export const ACTION_BINDINGS = Object.freeze({ KeyF: 'lantern', KeyE: 'interact', KeyJ: 'journal' });
 
 /** Saltos maiores que isto (px por evento) são falhas do navegador e são ignorados. */
 const MAX_MOUSE_STEP = 400;

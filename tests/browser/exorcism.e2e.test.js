@@ -254,7 +254,7 @@ describe('Exorcismo no Chrome', { skip }, () => {
     // no Chrome sem placa de vídeo, e o tempo total de desenho caiu (ver README).
     assert.ok(result.draws <= 40, `${result.draws} chamadas de desenho`);
     assert.equal(result.lights, 4); // três externas e a lamparina da cabana
-    assert.deepEqual(result.size, [640, 360]);
+    assert.deepEqual(result.size, [853, 480]);
     // Limite frouxo: o Chrome sem janela desenha por software.
     assert.ok(result.fps > 10, `${result.fps} FPS`);
     noProblems();

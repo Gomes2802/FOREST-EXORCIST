@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.7.0 — 2026-11-27
+
+Etapa 7: investigação e pistas. A Etapa 8 não foi feita.
+
+### Adicionado
+
+- Oito documentos com narrativa própria na cabana, junto à porta e nas trilhas
+  (`content/investigation.js`, `world/buildings/clues.js`).
+- Leitura com a tecla `E` e caderno de investigação com a tecla `J`: registros,
+  momento da descoberta, objetivos e descobertas (`ui/notebook.js`).
+- Sete objetivos concluídos em qualquer ordem, com avisos que não se repetem
+  (`systems/investigation.js`).
+- Modos `reading` e `journal`, com controles, entidades e tempo congelados.
+- Cenários `vegetacao`, `exterior`, `exploracao`, `pausa`, `leitura` e `caderno`
+  no benchmark, e a coluna de imagens 3D por segundo.
+- Testes unitários e de navegador da etapa.
+
+### Desempenho
+
+- Pausa, leitura e caderno não redesenham mais a cena 3D a cada quadro.
+- A lista de objetos ao alcance da tecla `E` é reaproveitada entre quadros.
+- Os documentos da cabana não acrescentam malhas nem chamadas de desenho.
+
+### Corrigido
+
+- Em Média e Alta, o campo **Resolução da imagem** ficava em branco: faltava a
+  opção 853x480.
+- Quatro testes de navegador ainda esperavam 640x360 na qualidade Média.
+
+### Incluído desde a 0.6.0
+
+- Noite mais escura e resolução interna de Média e Alta de 640x360 para 853x480.
+
 ## 0.6.0 — 2026-11-27
 
 Etapas 6 (construções abandonadas) e 9 (variedade sobrenatural). As Etapas 7 e 8

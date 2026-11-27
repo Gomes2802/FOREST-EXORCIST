@@ -340,7 +340,7 @@ describe('Exploração no Chrome', { skip }, () => {
     noProblems();
   });
 
-  test('desempenho: poucas chamadas de desenho e resolução 640x360 em movimento', async () => {
+  test('desempenho: poucas chamadas de desenho e resolução da qualidade Média em movimento', async () => {
     await playWithoutLock();
     await page.keyDown('KeyW');
     const result = await page.evaluate(`(async () => {
@@ -360,7 +360,7 @@ describe('Exploração no Chrome', { skip }, () => {
     // chamadas de desenho (eram 24), mas cada instância custava quase uma chamada
     // no Chrome sem placa de vídeo, e o tempo total de desenho caiu (ver README).
     assert.ok(result.most > 0 && result.most <= 40, `${result.most} chamadas de desenho`);
-    assert.deepEqual(result.size, [640, 360]);
+    assert.deepEqual(result.size, [853, 480]);
     noProblems();
   });
 });

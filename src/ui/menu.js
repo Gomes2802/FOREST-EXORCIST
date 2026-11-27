@@ -10,6 +10,7 @@ export class Menu {
    *   onResume: () => void,
    *   onResumeWithoutLock: () => void,
    *   onPause: () => void,
+   *   onCloseNotebook: () => void,
    *   onMenu: () => void,
    *   onSetting: (name: string, value: number) => unknown,
    *   closeWindow?: () => void,
@@ -75,8 +76,12 @@ export class Menu {
       this.show('pause');
       return;
     }
+    if (mode === 'reading' || mode === 'journal') {
+      this.show('notebook');
+      return;
+    }
     // Voltou ao menu: só troca se ainda estiver em uma tela de jogo.
-    if (this.current === 'hud' || this.current === 'pause') this.show('main');
+    if (['hud', 'pause', 'notebook'].includes(this.current)) this.show('main');
   }
 
   show(name) {
@@ -106,6 +111,9 @@ export class Menu {
         break;
       case 'pause':
         this.callbacks.onPause();
+        break;
+      case 'close-notebook':
+        this.callbacks.onCloseNotebook();
         break;
       case 'settings':
         this.show('settings');

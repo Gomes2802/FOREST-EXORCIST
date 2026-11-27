@@ -5,6 +5,7 @@ import { PixelRenderer } from './graphics/pixelRenderer.js';
 import { SpriteManager } from './graphics/spriteManager.js';
 import { Menu } from './ui/menu.js';
 import { Hud } from './ui/hud.js';
+import { Notebook } from './ui/notebook.js';
 
 const pixelRenderer = new PixelRenderer(CONFIG.pixel);
 const spriteManager = new SpriteManager({ pixelRenderer, basePath: CONFIG.assets.spriteBasePath });
@@ -15,6 +16,7 @@ const menu = new Menu(document, {
   onResume: () => game.resume(),
   onResumeWithoutLock: () => game.resumeWithoutLock(),
   onPause: () => game.pause(),
+  onCloseNotebook: () => game.closeNotebook(),
   onMenu: () => game.quitToMenu(),
   onSetting: async (name, value) => {
     if (name === 'renderScale') game.setRenderScale(value);
@@ -58,6 +60,11 @@ async function boot() {
   game.onQualityChange = ({ quality, renderScale }) => menu.setValues({ quality, renderScale });
   const hud = new Hud(document, { flash: CONFIG.exorcism.flash });
   game.onHud = (state) => hud.render(state);
+  const notebook = new Notebook(document, {
+    investigation: game.investigation,
+    onClose: () => game.closeNotebook(),
+  });
+  game.onNotebook = (view) => notebook.open(view);
   await game.init();
   // Atalho para laboratórios: ?qualidade=muito-baixo (ver start.sh --qualidade).
   const requested = new URLSearchParams(window.location.search).get('qualidade');

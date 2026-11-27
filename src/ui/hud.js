@@ -18,6 +18,7 @@ export class Hud {
     this.prompt = document.getElementById('interact-prompt');
     this.promptText = document.getElementById('interact-text');
     this.note = document.getElementById('interact-message');
+    this.toast = document.getElementById('hud-toast');
     this.flash = flash ? document.getElementById('hud-flash') : null;
     this.last = {};
   }
@@ -25,11 +26,12 @@ export class Hud {
   /**
    * @param {{ raised: boolean, aim: 'idle'|'target'|'exorcising',
    *   progress: number|null, message: string|null, notice?: string|null,
-   *   prompt?: string|null, note?: string|null }} state
+   *   prompt?: string|null, note?: string|null, toast?: string|null }} state
    *   notice: aviso discreto (ex.: qualidade gráfica reduzida); prompt: ação
-   *   disponível na tecla E; note: o que se descobriu ao examinar.
+   *   disponível na tecla E; note: o que se descobriu ao examinar; toast: aviso da
+   *   investigação.
    */
-  render({ raised, aim, progress, message, notice = null, prompt = null, note = null }) {
+  render({ raised, aim, progress, message, notice = null, prompt = null, note = null, toast = null }) {
     const percent = progress === null ? null : Math.floor(progress * 100);
     this.#changed('raised', raised, () => {
       this.indicator.hidden = !raised;
@@ -58,6 +60,11 @@ export class Hud {
       if (!this.note) return;
       this.note.hidden = !note;
       this.note.textContent = note ?? '';
+    });
+    this.#changed('toast', toast, () => {
+      if (!this.toast) return;
+      this.toast.hidden = !toast;
+      this.toast.textContent = toast ?? '';
     });
     this.#changed('notice', notice, () => {
       if (!this.notice) return;

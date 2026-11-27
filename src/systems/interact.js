@@ -1,6 +1,6 @@
 /**
  * Interações com a tecla E: escolhe o que o jogador está olhando de perto e
- * responde (abrir ou fechar a porta, examinar um objeto).
+ * responde (abrir ou fechar a porta, examinar um objeto, ler um documento).
  */
 import { isBlocked } from './interaction.js';
 
@@ -44,11 +44,20 @@ export function touchesBox(point, radius, box) {
  */
 export function createInteractions({ settings, playerRadius, buildings }) {
   let focus = null;
+  const maxAngle = (settings.angle * Math.PI) / 180;
   /** Itens de cada construção, preparados uma vez. */
   const cache = new WeakMap();
   const itemsOf = (building) => {
     if (!cache.has(building)) cache.set(building, building.plan.interactables.map((item) => ({ ...item, building })));
     return cache.get(building);
+  };
+  /** Reaproveitada a cada quadro, para não gerar lixo de memória. */
+  const candidates = [];
+  const NONE = [];
+  /** A porta não esconde a si mesma; as paredes escondem tudo. */
+  const occluders = (item) => {
+    if (!item.building) return NONE;
+    return item.type === 'door' ? item.building.plan.walls : item.building.occluders;
   };
   /** Mensagem temporária: { text, time }. */
   let message = null;
@@ -61,7 +70,8 @@ export function createInteractions({ settings, playerRadius, buildings }) {
     if (item.type === 'door') {
       return item.building.doorOpen ? settings.prompts.close : settings.prompts.open;
     }
-    return `${settings.prompts.examine} ${item.name}`;
+    const read = item.type === 'document' && item.verb !== 'examine';
+    return `${read ? settings.prompts.read : settings.prompts.examine} ${item.name}`;
   }
 
   return {
@@ -84,22 +94,23 @@ export function createInteractions({ settings, playerRadius, buildings }) {
         message.time -= dt;
         if (message.time <= 0) message = null;
       }
-      const items = [];
-      for (const building of buildings()?.buildings ?? []) {
+      candidates.length = 0;
+      const world = buildings();
+      for (const building of world?.buildings ?? NONE) {
         const { center } = building.plan;
         // Longe da construção não há nada ao alcance: evita trabalho por quadro.
         if (Math.hypot(center.x - eye.x, center.z - eye.z) > settings.nearby) continue;
-        items.push(...itemsOf(building));
+        for (const item of itemsOf(building)) candidates.push(item);
       }
-      focus = findInteractable(eye, direction, items, {
-        maxAngle: (settings.angle * Math.PI) / 180,
-        // A porta não esconde a si mesma; as paredes escondem tudo.
-        occluders: (item) => (item.type === 'door' ? item.building.plan.walls : item.building.occluders),
-      });
+      // Documentos na floresta: poucos, descartados pela distância.
+      for (const item of world?.props ?? NONE) candidates.push(item);
+      focus = findInteractable(eye, direction, candidates, { maxAngle, occluders });
     },
     /** @returns {boolean} true se algo respondeu. */
     use(playerPosition) {
       if (!focus) return false;
+      // Quem abre a leitura é o jogo (ver core/game.js).
+      if (focus.type === 'document') return true;
       if (focus.type === 'examine') {
         say(focus.message);
         return true;

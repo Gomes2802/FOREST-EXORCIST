@@ -2,7 +2,9 @@
  * Orquestra o motor 3D, a cena, o ciclo de renderização e os modos de jogo:
  *  - "menu": câmera balançando atrás do menu;
  *  - "playing": o jogador explora a floresta;
- *  - "paused": a cena fica congelada.
+ *  - "paused": a cena fica congelada;
+ *  - "reading" e "journal": documento ou caderno abertos, com a cena congelada.
+ * Com a cena congelada o 3D não é redesenhado: a imagem anterior permanece.
  */
 import { createLighting } from '../world/lighting.js';
 import { createForest } from '../world/forest.js';
@@ -19,6 +21,12 @@ import { viewDirection } from '../world/lighting.js';
 import { createCameraController } from './camera.js';
 import { InputController } from './input.js';
 import { createFootsteps } from '../audio/footsteps.js';
+import { createInvestigation } from '../systems/investigation.js';
+
+/** Modos em que nada se move. */
+const FROZEN = new Set(['paused', 'reading', 'journal']);
+/** Modos com o caderno ou um documento abertos. */
+const NOTEBOOK = new Set(['reading', 'journal']);
 
 export class Game {
   constructor({
@@ -72,6 +80,20 @@ export class Game {
     this.mode = 'menu';
     /** Chamado a cada mudança de modo com { mode, control, notice }. */
     this.onModeChange = () => {};
+    /** Chamado ao abrir o caderno ou um documento: { mode, document }. */
+    this.onNotebook = () => {};
+    /** Documentos encontrados, objetivos e descobertas da exploração atual. */
+    this.investigation = createInvestigation(config.investigation);
+    /** Segundos de exploração (não conta pausa, leitura nem menu). */
+    this.playTime = 0;
+    /** Aviso da investigação na tela: { text, time }. */
+    this.toast = null;
+    this.indoors = false;
+    this.lastTarget = null;
+    /** Controle ('lock' | 'drag') a retomar ao fechar o caderno. */
+    this.returnControl = null;
+    /** Quadros que ainda precisam ser desenhados com a cena congelada. */
+    this.redraw = 0;
     this.session = 0;
     /** Captura em andamento (evita pedidos duplicados). */
     this.capturing = null;
@@ -107,9 +129,12 @@ export class Game {
       this.input.onAction = (action) => {
         if (this.mode !== 'playing') return;
         if (action === 'lantern') this.lights.flashlight.toggle();
-        else if (action === 'interact') this.interactions.use(this.player.position);
+        else if (action === 'interact') this.#interact();
+        else if (action === 'journal') this.openJournal();
       };
       this.input.attach();
+      // Contexto WebGL recuperado com a cena congelada: é preciso redesenhar.
+      this.engine.onContextRestoredObservable?.add(() => this.invalidate());
       this.state = 'ready';
     } catch (error) {
       this.state = 'failed';
@@ -134,12 +159,28 @@ export class Game {
     // Limita o delta para a câmera não saltar depois de a aba ficar em segundo plano.
     const delta = Math.min(this.engine.getDeltaTime() / 1000, 0.1);
     this.update(delta);
+    if (this.frozen) {
+      if (this.redraw <= 0) return;
+      this.redraw -= 1;
+      this.#followPlayer();
+    }
     this.scene.render();
+  }
+
+  /** Pausa, leitura ou caderno: a cena não se move. */
+  get frozen() {
+    return FROZEN.has(this.mode);
+  }
+
+  /** A imagem congelada precisa ser desenhada de novo (tamanho ou opções). */
+  invalidate() {
+    this.redraw = Math.max(this.redraw, 1);
   }
 
   /** Avança a simulação conforme o modo atual (sem desenhar). */
   update(delta) {
     if (this.mode === 'playing') {
+      this.playTime += delta;
       const { dx, dy } = this.input.consumeLook();
       this.view.look(dx, dy);
       this.player.update(delta, this.input.getIntent(), this.view.yaw);
@@ -149,16 +190,17 @@ export class Game {
       this.#updateInteraction(delta);
       this.entities.update(delta, this.#viewer());
       this.#updateAutoQuality(delta);
+      this.#updateToast(delta);
     } else if (this.mode === 'menu') {
       this.view.updateIdle(delta, this.player.position);
     }
-    // Pausado, entidades, porta e chama também ficam imóveis.
-    if (this.mode !== 'paused') {
+    // Congelado, entidades, porta e chama também ficam imóveis.
+    if (!this.frozen) {
       this.entities.animate(delta);
       const { x, z } = this.player.body.position;
       this.buildings.animate(delta, { x, z, radius: this.config.player.radius });
+      this.#followPlayer();
     }
-    this.#followPlayer();
     this.onHud(this.#hudState());
   }
 
@@ -187,11 +229,47 @@ export class Game {
 
   pause(notice = null) {
     if (this.mode !== 'playing') return;
+    this.#freeze();
+    this.#setMode('paused', { notice });
+  }
+
+  /** Abre o caderno de investigação (só durante a exploração). */
+  openJournal() {
+    this.#openNotebook('journal');
+  }
+
+  /** Abre um documento para leitura e o registra no caderno. */
+  openDocument(id) {
+    if (this.mode !== 'playing') return;
+    this.investigation.discover(id, this.playTime);
+    if (this.investigation.has(id)) this.#openNotebook('reading', id);
+  }
+
+  /** Volta à exploração. Chamar em um clique ou tecla (captura do ponteiro). */
+  closeNotebook() {
+    if (!NOTEBOOK.has(this.mode)) return Promise.resolve(this.mode);
+    this.#unlockAudio();
+    if (this.returnControl === 'drag') {
+      this.#enterPlaying('drag');
+      return Promise.resolve(this.mode);
+    }
+    return this.capturing ?? this.#capture();
+  }
+
+  #openNotebook(mode, document = null) {
+    if (this.mode !== 'playing') return;
+    this.returnControl = this.input.mode;
+    this.#freeze();
+    this.#setMode(mode);
+    this.onNotebook({ mode, document });
+  }
+
+  /** Solta os controles e silencia: comum à pausa, à leitura e ao caderno. */
+  #freeze() {
     this.input.disable();
     this.player.stop();
     this.footsteps.suspend();
     this.sounds.suspend();
-    this.#setMode('paused', { notice });
   }
 
   quitToMenu() {
@@ -216,6 +294,11 @@ export class Game {
     this.target = null;
     this.messageTime = 0;
     this.notice = null;
+    this.investigation.reset();
+    this.playTime = 0;
+    this.toast = null;
+    this.indoors = false;
+    this.lastTarget = null;
     this.#followPlayer();
     this.onHud(this.#hudState());
   }
@@ -338,6 +421,8 @@ export class Game {
   }
 
   #setMode(mode, { control = null, notice = null } = {}) {
+    // Ao congelar, dois quadros garantem a imagem atual na tela.
+    if (FROZEN.has(mode) && !this.frozen) this.redraw = 2;
     this.mode = mode;
     this.onModeChange({ mode, control, notice });
   }
@@ -415,6 +500,25 @@ export class Game {
     this.interactions.update(delta, camera.position, viewDirection(camera.rotation.y, camera.rotation.x));
   }
 
+  /** Tecla E: documento abre a leitura; objeto examinado vira descoberta. */
+  #interact() {
+    const item = this.interactions.focus;
+    if (!this.interactions.use(this.player.position)) return;
+    if (item.type === 'document') this.openDocument(item.documentId);
+    else if (item.type === 'examine') this.investigation.note(`examined:${item.id}`);
+  }
+
+  /** Mostra os avisos da investigação, um de cada vez. */
+  #updateToast(delta) {
+    if (this.toast) {
+      this.toast.time -= delta;
+      if (this.toast.time <= 0) this.toast = null;
+    }
+    if (this.toast) return;
+    const text = this.investigation.takeNotice();
+    if (text) this.toast = { text, time: this.config.investigation.noticeDuration };
+  }
+
   /** Mira, cruz e progresso; só durante o jogo. */
   #updateExorcism(delta) {
     const { camera } = this.view;
@@ -427,8 +531,13 @@ export class Game {
       this.entities.entities,
       this.#occluders(),
     );
+    if (this.target !== this.lastTarget) {
+      this.lastTarget = this.target;
+      if (this.target) this.investigation.note(`sighted:${this.target.id}`);
+    }
     const expelled = this.exorcism.update(delta, { holding, readyTime, target: this.target });
     if (expelled) {
+      this.investigation.note(`exorcised:${expelled.id}`);
       this.sounds.event('exorcised');
       this.target = null;
       this.message = expelled.expelledMessage ?? this.config.exorcism.message;
@@ -455,6 +564,7 @@ export class Game {
       notice: this.notice?.text ?? null,
       prompt: this.interactions.prompt,
       note: this.interactions.message,
+      toast: this.toast?.text ?? null,
     };
   }
 
@@ -512,23 +622,33 @@ export class Game {
     if (!this.forest) return;
     const { x, z } = camera.position;
     const indoors = Boolean(this.buildings) && insideBuilding(this.buildings.plans, x, z);
+    // Só na mudança: entrar numa construção é um acontecimento da investigação.
+    if (this.mode === 'playing' && indoors !== this.indoors) {
+      this.indoors = indoors;
+      for (const plan of indoors ? this.buildings.plans : []) {
+        if (insideBuilding([plan], x, z)) this.investigation.note(`entered:${plan.id}`);
+      }
+    }
     this.forest.follow(camera.position, camera.rotation, indoors);
     this.buildings?.follow(camera.position, this.forest.distances.far);
   }
 
   resize() {
     this.engine?.resize();
+    this.invalidate();
   }
 
   /** Resolução interna da imagem 3D (1 = nativa; maior = mais pixelado). */
   setRenderScale(value) {
     this.pixelRenderer.configure({ renderScale: value });
     this.pixelRenderer.applyToEngine(this.engine);
-    this.engine.resize();
+    this.resize();
   }
 
   setFogDensity(value) {
-    if (Number.isFinite(value) && value >= 0) this.scene.fogDensity = value;
+    if (!Number.isFinite(value) || value < 0) return;
+    this.scene.fogDensity = value;
+    this.invalidate();
   }
 
   /** Muda a resolução dos sprites e recria a floresta. Chamadas são enfileiradas. */
@@ -548,6 +668,7 @@ export class Game {
       this.cross.refresh();
       this.#followPlayer();
       await this.#warmUp();
+      this.invalidate();
     });
     this.rebuildQueue = task.catch(() => {});
     return task;

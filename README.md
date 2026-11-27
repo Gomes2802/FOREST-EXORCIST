@@ -3,10 +3,10 @@
 Terror sobrenatural em primeira pessoa, em uma floresta à noite, com pixel art
 em um ambiente 3D.
 
-**Estado atual: Etapas 6 e 9 (cabana abandonada e variedade sobrenatural), versão
-0.6.0.** Há uma cabana explorável na floresta e três entidades diferentes, que
-aparecem, observam, somem e podem ser expulsas com a cruz. Nenhuma persegue nem
-ataca. As Etapas 7 e 8 ainda não foram feitas.
+**Estado atual: Etapa 7 (investigação e pistas), versão 0.7.0.** Há uma cabana
+explorável, três entidades que aparecem, observam, somem e podem ser expulsas com
+a cruz, e uma investigação com documentos, caderno e objetivos. Nenhuma entidade
+persegue nem ataca. A Etapa 8 ainda não foi feita.
 
 ## Como jogar (sem internet)
 
@@ -29,7 +29,8 @@ a aba e pressione `Ctrl+C` no terminal.
 | Mouse | Olhar |
 | `Shift` (segurar) | Correr |
 | Botão esquerdo (segurar) | Erguer a cruz |
-| `E` | Abrir ou fechar a porta, examinar objetos |
+| `E` | Abrir ou fechar a porta, examinar objetos, ler documentos |
+| `J` | Abrir o caderno de investigação |
 | `F` | Ligar / desligar a lanterna |
 | `Esc` | Liberar o mouse e pausar |
 
@@ -87,6 +88,36 @@ Para criar outro tipo de construção, escreva uma função de planta como `plan
 (`src/world/buildings/cabin.js`) e registre-a em `PLANNERS`
 (`src/world/buildings/index.js`). Colisões, porta, visão, interação e aparições já
 usam a planta.
+
+## Investigação
+
+A cabana pertenceu a um investigador. Oito documentos contam, aos poucos, o que
+ele viu. Chegue perto, olhe para a pista e aperte `E`. Na floresta, procure
+estacas com folhas presas, junto às trilhas.
+
+- **Leitura:** o jogo para enquanto o documento está aberto. Feche com `E`, `Esc`
+  ou o botão **Fechar**.
+- **Caderno (`J`):** mostra só o que você encontrou, quando encontrou, os
+  objetivos e as descobertas. Escolha com o mouse ou com as setas; feche com `J`,
+  `Esc` ou **Fechar**.
+- **Objetivos:** concluem sozinhos, em qualquer ordem, com um aviso no canto da
+  tela. Não bloqueiam nada: dá para explorar e exorcizar sem segui-los.
+- **Registros:** valem para a exploração atual. Voltar ao menu (ou fechar a
+  página) começa do zero; não há salvamento em disco.
+
+Ao fechar a leitura, o Chrome captura o mouse de novo. Se ele recusar, o jogo
+fica pausado: clique em **Continuar**.
+
+| Ajuste | Onde |
+| --- | --- |
+| Textos, lugares, objetivos e descobertas | `src/content/investigation.js` |
+| Alcance de leitura e distância de desenho | `reach`, `drawDistance` (mesmo arquivo) |
+| Tempo de cada aviso | `noticeDuration` (mesmo arquivo) |
+| Aparência das peças | `src/world/buildings/clues.js` |
+
+Um documento novo é uma entrada em `documents`, com `place.form` igual a `floor`,
+`wall`, `photo`, `stake` ou `stone`. Para ele contar no objetivo de reunir tudo,
+acrescente-o também à lista do objetivo `arquivo`.
 
 ## As entidades
 
@@ -317,8 +348,8 @@ Em **Configurações → Qualidade gráfica**:
 
 | Nível | Resolução | Árvores e pedras | Arbustos e plantas | Grama (cheia até) | Sombras |
 | --- | --- | --- | --- | --- | --- |
-| Alta | 640x360 | até a neblina | 34 | 24 (16) | 36 |
-| Média | 640x360 | até a neblina | 26 | 18 (10) | 28 |
+| Alta | 853x480 | até a neblina | 34 | 24 (16) | 36 |
+| Média | 853x480 | até a neblina | 26 | 18 (10) | 28 |
 | Baixa | 512x288 | 31 | 19 | 13 (7) | 18 |
 | Muito baixa | 426x240 | 27 | 14 | 10 (5) | 12 |
 | Automática (padrão) | começa na Média | | | | |
@@ -333,6 +364,42 @@ Em **Configurações → Qualidade gráfica**:
 - Os níveis ficam em `graphics` (`src/config.js`). As escolhas valem até a página
   ser fechada; para fixar uma, use `./start.sh --qualidade <nível>` ou o endereço
   `?qualidade=<nível>`.
+
+### Medições (v0.7.0, 27/11/2026)
+
+`npm run benchmark -- --seconds 8 --quality <nível> --scenarios <cenas>`, Chrome
+158 **sem janela, WebGL por software (SwiftShader)**, Windows 10, i5-12400F,
+1280x720. "Antes" é o commit anterior à etapa (`c3f123c`), medido na mesma sessão,
+alternando as versões; mediana de três rodadas. FPS médio e, entre parênteses, o
+1% low.
+
+| Cena | Muito baixa, antes | Muito baixa, 0.7.0 | Média, antes | Média, 0.7.0 |
+| --- | --- | --- | --- | --- |
+| Floresta (câmera girando) | 37,4 (21,7) | 37,4 (21,9) | 26,1 (18,6) | 26,1 (19,9) |
+| Vegetação densa | 36,5 (26,4) | 36,5 (24,7) | 24,9 (20,7) | 24,8 (19,4) |
+| Exterior da cabana | 35,4 (28,8) | 35,3 (29,6) | 22,9 (19,7) | 22,9 (19,7) |
+| Interior da cabana | 34,0 (29,6) | 34,0 (28,2) | 21,8 (19,7) | 21,6 (18,7) |
+| Exorcismo | 36,8 (32,7) | 36,9 (32,4) | 25,4 (21,8) | 25,4 (22,2) |
+| Três entidades | 36,1 (26,9) | 36,1 (28,2) | 24,5 (20,8) | 24,4 (17,7) |
+| Andando pela trilha | 37,5 (25,0) | 37,2 (26,0) | 25,6 (21,6) | 25,5 (21,2) |
+
+| Tela parada | Imagens 3D por segundo, antes → 0.7.0 | JavaScript por quadro |
+| --- | --- | --- |
+| Pausa (Muito baixa) | 35 → 0 | 0,9 ms → ~0 |
+| Pausa (Média) | 24 → 0 | 0,9 ms → ~0 |
+| Leitura e caderno | não existiam → 0 | ~0 |
+
+Nas telas paradas o navegador volta ao ritmo máximo dele (~180 quadros por
+segundo nesta máquina) porque só mostra a interface; não é desempenho do 3D.
+
+- **Muito baixa:** a média ficou acima de 30 FPS em todas as cenas. O 1% low ficou
+  entre 22 e 32 FPS: a meta de 30 **não** vale para os piores quadros.
+- **Média:** 21 a 26 FPS, antes e depois. Desde o commit anterior à etapa, ela
+  desenha em 853x480 (eram 640x360). Sem placa de vídeo, use a Muito baixa. A
+  Automática desce sozinha quando fica abaixo de 28 FPS.
+- Em repetições só da cabana, a 0.7.0 ficou 0,2 a 0,4 FPS abaixo (cerca de 1%),
+  com 1 a 2 chamadas de desenho a mais; a causa não foi isolada.
+- A cena passou de 492 para 496 malhas e de 27 para 28 materiais.
 
 ### Medições (v0.6.0, 27/11/2026)
 
@@ -425,7 +492,7 @@ Tudo é controlado por `src/graphics/pixelRenderer.js`, com valores em
 3. **Filtro de textura.** Sprites usam nearest sem mipmaps. O chão usa nearest
    com mipmaps, para não cintilar ao longe.
 4. **Imagem 3D.** A cena é desenhada em resolução menor (`renderScale: 2` dá
-   640x360 em 1280x720) e ampliada com `image-rendering: pixelated`, sem
+   640x360 em 1280x720; os níveis definem o próprio valor) e ampliada com `image-rendering: pixelated`, sem
    antialias.
 
 Para imagens de interface, use `<img data-pixelate data-pixel-height="32">` ou
@@ -455,15 +522,19 @@ src/
   world/                  forest.js (vegetação), environment.js (terreno, céu,
                           neblina), lighting.js (noite e lanterna), colliders.js
   player/                 player.js (movimento e colisões), cross.js (cruz)
-  world/buildings/        index.js (montagem) e cabin.js (planta da cabana)
+  world/buildings/        index.js (montagem), cabin.js (planta), clues.js
+                          (pistas), geometry.js (caixas reunidas em malhas)
   entities/entity.js      máquina de estados e aparência das entidades
-  systems/                interaction.js (mira), exorcism.js (regras do exorcismo),
+  content/                investigation.js (documentos, objetivos e descobertas)
+  systems/                investigation.js (registros), interaction.js (mira),
+                          exorcism.js (regras do exorcismo),
                           haunting.js (comportamento), spawn.js (onde aparecer)
                           entityManager.js (tipos e limites), interact.js (tecla E)
   audio/                  footsteps.js (passos), entitySounds.js (entidades)
   graphics/               pixelRenderer.js, spriteManager.js, materials.js,
                           batches.js (atlas e geometria agrupada)
-  ui/                     menu.js (menu e pausa), hud.js (mira, barra, mensagem)
+  ui/                     menu.js (menu e pausa), hud.js (mira, barra, avisos),
+                          notebook.js (leitura e caderno)
 assets/                   sprites/, textures/ (cabin/, ui/), sounds/, models/
 tools/                    build, cópia da biblioteca, provisórios, benchmark.mjs
 tests/                    unit/, browser/, real/, helpers/
@@ -507,6 +578,13 @@ Para distribuir uma versão, faça `git checkout v0.4.1`, `npm run build` e copi
 
 ## Limitações conhecidas
 
+- Os registros da investigação não são salvos entre explorações.
+- As pistas da floresta não bloqueiam a passagem e aparecem até 20 unidades de
+  distância (podem surgir um pouco de repente).
+- Todos os documentos usam a mesma arte de papel; a fotografia usa a imagem do
+  retrato. O texto conta o que ela mostra.
+- Esta versão não foi testada em um computador com Linux Mint; as medições e os
+  testes foram feitos no Windows.
 - Há três entidades; nenhuma persegue, anda à vista ou ataca. Depois de expulsas,
   só voltam ao retornar ao menu.
 - A visão ao surgir é conferida contra troncos e uma aproximação da folhagem: em
@@ -522,6 +600,7 @@ Para distribuir uma versão, faça `git checkout v0.4.1`, `npm run build` e copi
   arbustos e móveis não escondem uma entidade.
 - Em software, há um quadro mais lento na primeira vez que o interior da cabana
   aparece na tela.
+- Sem placa de vídeo, a qualidade Média (853x480) fica abaixo de 30 FPS.
 - É necessário o servidor local; `file://` não funciona.
 - Sprites são planos voltados para a câmera (todos paralelos à tela, como em jogos
   clássicos); vistos de perto, não têm volume.
@@ -531,7 +610,7 @@ Para distribuir uma versão, faça `git checkout v0.4.1`, `npm run build` e copi
 - A borda da área explorável é invisível; as trilhas continuam na neblina além
   dela.
 - Sem placa de vídeo, a média fica acima de 30 FPS na qualidade Muito baixa, mas
-  o 1% low fica entre 22 e 26 FPS no Chrome sem janela (ver Medições). Em
+  o 1% low fica entre 22 e 32 FPS no Chrome sem janela (ver Medições). Em
   computadores mais lentos que o usado nas medições, pode ser preciso também a
   neblina "Densa" ou a resolução 320x180.
 - Nas qualidades Baixa e Muito baixa, árvores distantes surgem um pouco antes da
