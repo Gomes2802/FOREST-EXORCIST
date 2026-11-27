@@ -364,6 +364,7 @@ export class Game {
       this.messageTime = this.config.exorcism.messageDuration;
     }
     this.cross.setExorcising(this.entity.state === 'exorcizing');
+    this.sounds.setExorcising(this.entity.state === 'exorcizing');
   }
 
   #hudState() {

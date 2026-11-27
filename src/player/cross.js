@@ -66,8 +66,50 @@ export function createSpriteCrossVisual(BABYLON, scene, { settings, spriteManage
   };
 }
 
+/** Passo fixo da mola: o movimento não depende da taxa de quadros. */
+const SPRING_STEP = 1 / 120;
+
+/**
+ * Movimento da mão: a cruz sobe em arco, vinda da direita e de baixo, com uma
+ * mola amortecida (ultrapassa um pouco e assenta, como um punho real). Só afeta o
+ * desenho; o tempo de erguer, usado pelo exorcismo, continua o de createRaise.
+ */
+export function createHandMotion({ omega, zeta }) {
+  let position = 0;
+  let velocity = 0;
+  return {
+    /** 0 = abaixada, 1 = erguida (pode passar de 1 por um instante). */
+    get position() {
+      return position;
+    },
+    get velocity() {
+      return velocity;
+    },
+    /** @returns {void} avança a mola até o alvo, em passos fixos. */
+    follow(target, dt) {
+      let remaining = Math.min(Math.max(dt, 0), 0.1);
+      while (remaining > 1e-9) {
+        const step = Math.min(SPRING_STEP, remaining);
+        remaining -= step;
+        const acceleration = omega * omega * (target - position) - 2 * zeta * omega * velocity;
+        velocity += acceleration * step;
+        position += velocity * step;
+      }
+      if (Math.abs(target - position) < 1e-5 && Math.abs(velocity) < 1e-4) {
+        position = target;
+        velocity = 0;
+      }
+    },
+    reset() {
+      position = 0;
+      velocity = 0;
+    },
+  };
+}
+
 export function createCross(BABYLON, scene, camera, { settings, requiredRaise, createVisual }) {
   const raise = createRaise(settings, requiredRaise);
+  const hand = createHandMotion(settings.motion);
   const root = new BABYLON.TransformNode('cross', scene);
   root.parent = camera;
   let visual = null;
@@ -85,13 +127,15 @@ export function createCross(BABYLON, scene, camera, { settings, requiredRaise, c
 
   function apply() {
     const [x, y, z] = settings.position;
-    const t = raise.amount;
-    const eased = t * t * (3 - 2 * t);
+    const { arcX, arcTilt, sway } = settings.motion;
+    const p = hand.position;
+    const lower = 1 - p;
     const tremor = exorcising ? Math.sin(time * 38) * settings.tremor : 0;
-    root.position.set(x + tremor, y - (1 - eased) * settings.loweredOffset, z);
-    root.rotation.z = settings.tilt - (1 - eased) * 0.3;
+    // A mão vem da direita e de baixo; o pulso fica para trás do movimento.
+    root.position.set(x + tremor + lower * arcX, y - lower * settings.loweredOffset, z);
+    root.rotation.z = settings.tilt - lower * arcTilt - hand.velocity * sway;
     visual.setGlow(exorcising ? 0.65 + Math.sin(time * 9) * 0.35 : 0);
-    root.setEnabled(t > 0);
+    root.setEnabled(raise.amount > 0 || Math.abs(p) > 1e-3);
   }
 
   build();
@@ -112,6 +156,7 @@ export function createCross(BABYLON, scene, camera, { settings, requiredRaise, c
     update(dt, holding) {
       time += dt;
       const ready = raise.update(dt, holding);
+      hand.follow(raise.amount, dt);
       apply();
       return ready;
     },
@@ -126,6 +171,7 @@ export function createCross(BABYLON, scene, camera, { settings, requiredRaise, c
     },
     reset() {
       raise.reset();
+      hand.reset();
       exorcising = false;
       time = 0;
       apply();

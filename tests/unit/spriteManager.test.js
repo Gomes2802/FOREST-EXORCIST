@@ -34,7 +34,8 @@ test('os PNGs provisórios são RGBA (com transparência) e pequenos', async () 
   for (const { file } of Object.values(sprites)) {
     const png = readPngSize(projectPath(`assets/sprites/${file}`));
     assert.equal(png.colorType, 6, file);
-    assert.ok(Math.max(png.width, png.height) <= 256, file);
+    // Arte enviada pelo jogador pode ser maior que a provisória; o jogo a reduz ao pixelizar.
+    assert.ok(Math.max(png.width, png.height) <= 1024, file);
   }
 });
 

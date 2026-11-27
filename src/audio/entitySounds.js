@@ -9,7 +9,7 @@
  *   presence   em laço enquanto presente      exorcised ao ser expulsa
  */
 
-export const ENTITY_CUES = Object.freeze(['appear', 'presence', 'vanish', 'exorcised']);
+export const ENTITY_CUES = Object.freeze(['appear', 'presence', 'vanish', 'exorcised', 'exorcising']);
 
 /**
  * @param {{ volume: number } & Record<string, string|null>} settings
@@ -31,6 +31,8 @@ export function createEntitySounds(settings, {
   let loop = null;
   let active = false;
   let wantsPresence = false;
+  let wantsExorcism = false;
+  let exorcismLoop = null;
 
   function start(name, looping = false) {
     if (!active || !buffers.has(name)) return null;
@@ -40,6 +42,14 @@ export function createEntitySounds(settings, {
     source.connect(output);
     source.start();
     return source;
+  }
+
+  function refreshExorcism() {
+    if (wantsExorcism && active && !exorcismLoop) exorcismLoop = start('exorcising', true);
+    else if (!wantsExorcism && exorcismLoop) {
+      exorcismLoop.stop();
+      exorcismLoop = null;
+    }
   }
 
   function refreshPresence() {
@@ -83,6 +93,11 @@ export function createEntitySounds(settings, {
     suspend() {
       active = false;
       if (context?.state === 'running') context.suspend();
+    },
+    /** Toca em laço enquanto o exorcismo acontece (estado exorcizing). */
+    setExorcising(on) {
+      wantsExorcism = Boolean(on);
+      refreshExorcism();
     },
     /** @param {'appear'|'vanish'|'gone'|'exorcised'|'reset'} name acontecimento da entidade */
     event(name) {

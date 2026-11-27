@@ -23,7 +23,7 @@
       "alphaMode": "blend",
       "shading": "glow"
     },
-    "held_cross": { "file": "items/held_cross.png", "group": "held", "pixelHeight": 48 },
+    "held_cross": { "file": "items/held_cross.png", "group": "held", "pixelHeight": 128 },
     "cross": { "file": "items/cross.png", "group": "item", "worldHeight": 1.5, "shading": "glow" }
   }
 }

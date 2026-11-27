@@ -69,9 +69,11 @@ test('a cruz só aparece com o botão esquerdo, subindo e descendo suavemente', 
   assert.equal(cross.visible, true);
   assert.equal(cross.amount, 1);
   for (let i = 1; i < heights.length; i += 1) {
-    assert.ok(heights[i] >= heights[i - 1] - 1e-9, 'subida irregular');
+    // A mão ultrapassa um pouco a posição final e assenta (ver createHandMotion).
     assert.ok(heights[i] - heights[i - 1] < 0.15, 'salto na animação');
   }
+  const top = Math.max(...heights);
+  assert.ok(top - heights.at(-1) < 0.05, `sobrepasso exagerado: ${top - heights.at(-1)}`);
   assert.ok(heights.filter((h, i) => i > 0 && h > heights[i - 1] + 1e-6).length > 8, 'sem animação');
   release();
   run(settings.cross.lowerTime / 2);

@@ -37,7 +37,11 @@ export const CONFIG = deepFreeze({
      * Sons da entidade: ainda não há arquivos. Informe um caminho (ex.:
      * 'assets/sounds/entity/appear.mp3') para ativar cada um.
      */
-    entity: { appear: null, presence: null, vanish: null, exorcised: null, volume: 0.6 },
+    entity: {
+      appear: null, presence: null, vanish: null, exorcised: null,
+      exorcising: 'assets/sounds/entity/exorcism.mp3',
+      volume: 0.6,
+    },
     footsteps: {
       file: 'assets/sounds/footsteps/dirt_gravel.mp3',
       /** Volume geral (0 a 1). */
@@ -328,7 +332,7 @@ export const CONFIG = deepFreeze({
     /** Cruz na mão: posição em relação à câmera [direita, cima, frente]. */
     cross: {
       sprite: 'held_cross',
-      height: 0.5,
+      height: 0.56,
       position: [0.34, -0.36, 0.9],
       /** Quanto ela desce até sair da tela. */
       loweredOffset: 0.62,
@@ -336,8 +340,14 @@ export const CONFIG = deepFreeze({
       raiseTime: 0.25,
       lowerTime: 0.2,
       /** Cor na penumbra; brilha durante o exorcismo. */
-      tint: '#b9ad9c',
-      tremor: 0.004,
+      tint: '#ffffff',
+      tremor: 0,
+      /**
+       * Movimento da mão: omega (rapidez) e zeta (amortecimento; abaixo de 1 há
+       * um pequeno sobrepasso). arcX é quanto a cruz vem da direita, arcTilt a
+       * inclinação ao sair, sway o atraso do pulso.
+       */
+      motion: { omega: 13, zeta: 0.55, arcX: 0.12, arcTilt: 0.32, sway: 0.02 },
     },
   },
 
