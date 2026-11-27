@@ -120,6 +120,10 @@ export function createCross(BABYLON, scene, camera, { settings, requiredRaise, c
       exorcising = Boolean(value);
       apply();
     },
+    /** Volta a desenhar o estado atual, sem avançar o tempo. */
+    redraw() {
+      apply();
+    },
     reset() {
       raise.reset();
       exorcising = false;

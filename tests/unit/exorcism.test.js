@@ -19,6 +19,8 @@ async function ready(t, options) {
   t.after(() => game.dispose());
   await game.init();
   await game.play();
+  // Etapa 4 isolada: entidade presente no lugar antigo, sem o comportamento da Etapa 5.
+  game.haunting.summon(1.3, 11, { pinned: true });
 
   context.hold = () => emit(dom.element, 'pointerdown', { button: 0, buttons: 1 });
   context.release = () => emit(dom.window, 'pointerup', { button: 0, buttons: 0 });
@@ -45,7 +47,7 @@ async function ready(t, options) {
 test('há uma única entidade de teste, visível, não sólida e fora da floresta', async (t) => {
   const { game } = await ready(t);
   const { entity, forest } = game;
-  assert.equal(entity.state, 'present');
+  assert.equal(entity.state, 'watching');
   assert.equal(entity.progress, 0);
   assert.ok(entity.mesh.isEnabled() && entity.mesh.isVisible);
   assert.equal(entity.mesh.checkCollisions, false);
@@ -173,7 +175,7 @@ test('o progresso começa com a cruz erguida sobre a entidade', async (t) => {
   game.update(1 / 60);
   assert.equal(game.entity.progress, 0, 'a cruz ainda está subindo');
   run(1);
-  assert.equal(game.entity.state, 'exorcising');
+  assert.equal(game.entity.state, 'exorcizing');
   assert.ok(game.entity.progress > 0.1 && game.entity.progress < 0.4, `${game.entity.progress}`);
 });
 
@@ -185,7 +187,7 @@ test('soltar o botão interrompe e o progresso para', async (t) => {
   const before = game.entity.progress;
   release();
   run(2);
-  assert.equal(game.entity.state, 'present');
+  assert.equal(game.entity.state, 'watching');
   close(game.entity.progress, before);
   hold();
   run(1);
@@ -203,7 +205,7 @@ test('perder a mira interrompe e o progresso para', async (t) => {
   const lost = game.entity.progress;
   run(2);
   assert.equal(game.target, null);
-  assert.equal(game.entity.state, 'present');
+  assert.equal(game.entity.state, 'watching');
   close(game.entity.progress, lost);
   assert.ok(lost - before < 0.05, 'só avança enquanto a câmera ainda estava sobre ela');
 });
@@ -214,7 +216,7 @@ test('o tempo total é o configurado, e a entidade desaparece suavemente', async
   hold();
   const expected = settings.cross.raiseTime * settings.requiredRaise + settings.duration / settings.speed;
   run(expected - 0.1);
-  assert.equal(game.entity.state, 'exorcising');
+  assert.equal(game.entity.state, 'exorcizing');
   run(0.2);
   assert.equal(game.entity.state, 'exorcised');
   assert.equal(game.entity.progress, 1);
@@ -268,9 +270,8 @@ test('voltar ao menu restaura a entidade e a cruz', async (t) => {
   assert.equal(game.entity.state, 'exorcised');
   game.pause();
   game.quitToMenu();
-  assert.deepEqual([game.entity.state, game.entity.progress, game.cross.amount], ['present', 0, 0]);
-  assert.ok(game.entity.mesh.isEnabled());
-  assert.equal(game.entity.mesh.visibility, 1);
+  assert.deepEqual([game.entity.state, game.entity.progress, game.cross.amount], ['dormant', 0, 0]);
+  assert.equal(game.entity.mesh.isEnabled(), false);
 });
 
 test('a interface recebe os estados certos', async (t) => {
@@ -326,12 +327,13 @@ test('mudar a resolução dos sprites preserva o estado da entidade e a cruz', a
 
 test('regras do exorcismo: velocidade e perda de progresso configuráveis', () => {
   const entity = createEntityState();
+  entity.materialize();
   const exorcism = createExorcism({ ...settings, duration: 4, speed: 2, decayPerSecond: 0.1 });
   exorcism.update(1, { holding: true, readyTime: 1, target: entity });
   close(entity.progress, 0.5);
   exorcism.update(2, { holding: false, readyTime: 0, target: entity });
   close(entity.progress, 0.3);
-  assert.equal(entity.state, 'present');
+  assert.equal(entity.state, 'watching');
   const completed = exorcism.update(5, { holding: true, readyTime: 5, target: entity });
   assert.equal(completed, entity);
   assert.equal(exorcism.update(1, { holding: true, readyTime: 1, target: entity }), null);

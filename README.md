@@ -3,10 +3,9 @@
 Terror sobrenatural em primeira pessoa, em uma floresta à noite, com pixel art
 em um ambiente 3D.
 
-**Estado atual: Etapa 4 (cruz e exorcismo), com otimizações para computadores sem
-placa de vídeo (0.4.1).** É possível explorar a floresta à noite e expulsar uma
-entidade de teste com a cruz. Ela ainda não se move, não
-persegue nem ataca, e não há combate.
+**Estado atual: Etapa 5 (presença sobrenatural), versão 0.5.0.** Uma entidade
+aparece em pontos diferentes da floresta, observa o jogador, desaparece, reaparece
+e pode ser expulsa com a cruz. Ela não persegue nem ataca.
 
 ## Como jogar (sem internet)
 
@@ -60,15 +59,49 @@ Em endereços `file://`, o Chrome bloqueia módulos JavaScript (ES Modules) e o
 uso de imagens como texturas WebGL. Nesse caso a página mostra um aviso com a
 instrução acima. Não desative a segurança do navegador para contornar isso.
 
+## A entidade
+
+Uma única entidade surge na floresta alguns segundos depois de começar. Ela aparece
+aos poucos, a 12–22 unidades, ao lado do centro do olhar (nunca no meio da mira),
+em lugar onde possa ser identificada. Depois observa, voltando-se devagar para você,
+some e reaparece em outro ponto, escolhido só depois de ela sumir.
+
+| Estado | O que acontece | Passa para |
+| --- | --- | --- |
+| `dormant` | Invisível, esperando (8–18 s) | `appearing` |
+| `appearing` | Surge em 1,8 s; pode ser mirada a partir da metade | `watching`, `disappearing`, `exorcizing` |
+| `watching` | Observa por 6–14 s | `disappearing`, `exorcizing` |
+| `disappearing` | Some em 1,6 s (0,7 s se você chegar perto) | `dormant` |
+| `exorcizing` | Parada, sem poder sumir | `watching`, `exorcised` |
+| `exorcised` | Expulsa: não volta (só ao retornar ao menu) | — |
+
+Cada aparição tem um comportamento, que não se repete em seguida:
+
+| Comportamento | Cor | Some quando |
+| --- | --- | --- |
+| Parada | normal | o tempo acaba |
+| Tímida | azulada | é encarada a até 14 unidades por 3 s sem a cruz |
+| Esquiva | esverdeada | você desvia o olhar por 1,5 s depois de vê-la |
+
+Em qualquer um, ela também some se o tempo acabar, se você chegar a menos de 5
+unidades ou se afastar mais de 30. Interromper o exorcismo guarda o progresso
+(conforme a configuração) e dá 6 s de graça antes de ela poder partir.
+
+Ajustes em `haunting` (`src/config.js`): tempos (`first`, `interval`, `stay`,
+`appearTime`, `disappearTime`), distâncias (`minDistance`, `maxDistance`,
+`maxObserveDistance`, `fleeDistance`), neblina (`minVisibility`), ângulos, regras
+de visão (`sightPoints`, `foliageScale`, `fallbacks`), comportamentos (`moods`) e
+variação visual (`look`). Cores, rotação e flutuação ficam em `entity`.
+
 ## Exorcismo
 
-1. Siga a trilha à frente do ponto inicial até ver a entidade.
-2. Aproxime-se: dentro do alcance, a mira vira um losango vermelho.
-3. Segure o botão esquerdo para erguer a cruz e mantenha a mira sobre ela.
-4. Quando a barra se completar (4 segundos), a entidade é expulsa.
+1. Quando a entidade aparecer, aproxime-se: dentro do alcance (10), a mira vira um
+   losango vermelho.
+2. Segure o botão esquerdo para erguer a cruz e mantenha a mira sobre ela.
+3. Quando a barra se completar (4 segundos), a entidade é expulsa.
 
-Soltar o botão ou desviar a mira interrompe; o progresso fica guardado. Troncos e
-pedras altas na frente escondem a entidade. Voltar ao menu principal a restaura.
+Soltar o botão ou desviar a mira interrompe; o progresso fica guardado, inclusive
+se ela sumir e reaparecer. Troncos e pedras altas na frente a escondem da mira.
 
 | Ajuste (`src/config.js`) | Onde | Padrão |
 | --- | --- | --- |
@@ -80,11 +113,22 @@ pedras altas na frente escondem a entidade. Voltar ao menu principal a restaura.
 | Obstáculos bloqueiam a mira | `exorcism.blockedByObstacles` | `true` |
 | Mensagem e clarão ao concluir | `exorcism.message`, `messageDuration`, `flash` | — |
 | Cruz: sprite, tamanho, posição, tempos | `exorcism.cross` | — |
-| Entidade: posição, área detectada, efeitos | `entity` | — |
 
 Com a perda por segundo em 0,25, por exemplo, a barra esvazia em 4 s. Para trocar
 a cruz por um modelo, passe outra `createVisual` a `createCross`
-(`src/player/cross.js`). Não há som: o projeto ainda não tem arquivos de áudio.
+(`src/player/cross.js`).
+
+## Som
+
+**Passos:** `assets/sounds/footsteps/dirt_gravel.mp3` tem passos seguidos sobre terra
+e cascalho; cada um é um trecho da faixa (início em `audio.footsteps.steps`).
+Correndo, são mais frequentes e mais agudos. `npm run footsteps` recalcula os inícios.
+
+**Entidade:** a estrutura existe (`src/audio/entitySounds.js`), mas **ainda não há
+arquivos**. Coloque-os em `assets/sounds/` e informe o caminho em `audio.entity`
+(`appear`, `presence` em laço, `vanish`, `exorcised`). Sem arquivo, nada é carregado.
+
+O som só toca depois de um clique (exigência do navegador) e para na pausa e no menu.
 
 ## Substituir um sprite
 
@@ -149,8 +193,8 @@ Sem `collisionRadius`, o objeto pode ser atravessado.
 A floresta sorteia entre todos os sprites do mesmo grupo (`tree`, `tree_small`,
 `dead_tree`, `vegetation`, `plant`, `grass`, `rock`, `log`), então a nova árvore
 aparece sem alterar código. Os objetos
-em posição fixa (cruz fincada, algumas árvores etc.) estão em `forest.landmarks`, e a
-entidade em `entity`, ambos em `src/config.js`.
+em posição fixa (cruz fincada, algumas árvores etc.) estão em `forest.landmarks`, em
+`src/config.js`.
 
 Em código, um ID com pasta também funciona sem registro:
 `spriteManager.load('items/vela')` carrega `assets/sprites/items/vela.png`.
@@ -329,12 +373,14 @@ src/
   world/                  forest.js (vegetação), environment.js (terreno, céu,
                           neblina), lighting.js (noite e lanterna), colliders.js
   player/                 player.js (movimento e colisões), cross.js (cruz)
-  entities/entity.js      estados e aparência da entidade
-  systems/                interaction.js (mira por raycast), exorcism.js (regras)
+  entities/entity.js      máquina de estados e aparência da entidade
+  systems/                interaction.js (mira), exorcism.js (regras do exorcismo),
+                          haunting.js (comportamento), spawn.js (onde aparecer)
+  audio/                  footsteps.js (passos), entitySounds.js (entidade)
   graphics/               pixelRenderer.js, spriteManager.js, materials.js,
                           batches.js (atlas e geometria agrupada)
   ui/                     menu.js (menu e pausa), hud.js (mira, barra, mensagem)
-assets/                   sprites/, textures/, sounds/, models/
+assets/                   sprites/, textures/, sounds/footsteps/, models/
 tools/                    build, cópia da biblioteca, provisórios, benchmark.mjs
 tests/                    unit/, browser/, real/, helpers/
 ```
@@ -352,6 +398,7 @@ Requer Node.js 22 ou mais novo. Build e testes não precisam de `node_modules`.
 | `npm run test:real` | Captura do mouse e `Esc` reais; abre uma janela por alguns segundos (requer Xephyr e `python3-xlib`) |
 | `npm run placeholders` | Recria provisórios **ausentes** (`-- --force` sobrescreve todos) |
 | `npm run vendor` | Atualiza `lib/` após `npm install` (único passo que usa internet) |
+| `npm run footsteps` | Recalcula os inícios dos passos do arquivo de som |
 | `npm run benchmark` | Mede o desempenho no Chrome (ver `tools/benchmark.mjs`); aceita `-- --quality muito-baixo` |
 
 Opções dos testes de navegador: `FE_GPU=1` (usa a placa de vídeo em vez de WebGL
@@ -376,12 +423,16 @@ Para distribuir uma versão, faça `git checkout v0.4.1`, `npm run build` e copi
 
 ## Limitações conhecidas
 
-- Há uma única entidade, parada; depois de expulsa, só volta ao retornar ao menu.
+- Há uma única entidade, que não persegue, não anda e não ataca; depois de expulsa,
+  só volta ao retornar ao menu.
+- A visão ao surgir é conferida contra troncos e uma aproximação da folhagem: em
+  mata fechada ela pode aparecer parcialmente encoberta. Se o jogador estiver dentro
+  da copa de uma árvore, ela surge ao lado, fora da parte visível.
+- Os sons da entidade têm só a estrutura, sem arquivos.
 - A cruz é um sprite plano. No modo sem captura, arrastar para olhar também a
   ergue.
 - A mira considera apenas troncos, pedras e troncos caídos como bloqueio: copas e
   arbustos não escondem a entidade.
-- Sem efeitos sonoros.
 - É necessário o servidor local; `file://` não funciona.
 - Sprites são planos voltados para a câmera (todos paralelos à tela, como em jogos
   clássicos); vistos de perto, não têm volume.

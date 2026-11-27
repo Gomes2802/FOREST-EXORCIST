@@ -42,6 +42,8 @@ const SETUP = {
     game.forest.follow = () => {};`,
   floresta: 'game.player.teleport(0, 0);',
   exorcismo: `game.player.teleport(0.5, 6);
+    // A entidade fica presente e parada no mesmo lugar em todas as versões.
+    game.haunting?.summon(1.3, 11, { pinned: true });
     window.__holding = true;
     game.input.isPrimaryHeld = true;`,
 };
@@ -91,7 +93,10 @@ try {
       const start = last;
       while (last - start < ${seconds * 1000}) {
         game.view.look((turn / 60) / 0.0022, 0);
-        if (game.entity.progress > 0.6) game.entity.reset();
+        if (game.entity.progress > 0.6) {
+          game.entity.reset();
+          game.haunting?.summon(1.3, 11, { pinned: true });
+        }
         if (window.__holding) game.input.isPrimaryHeld = true;
         await new Promise(requestAnimationFrame);
         const now = performance.now();

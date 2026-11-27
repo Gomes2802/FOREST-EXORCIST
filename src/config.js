@@ -4,7 +4,7 @@
  * assets/sprites/manifest.json (dados, sem código).
  */
 export const CONFIG = deepFreeze({
-  version: '0.4.2',
+  version: '0.5.0',
 
   display: {
     /** Resolução de referência. O canvas se adapta à janela. */
@@ -33,6 +33,11 @@ export const CONFIG = deepFreeze({
    * de onda (ver tools/analyze-footsteps.mjs). Na corrida o trecho toca mais rápido.
    */
   audio: {
+    /**
+     * Sons da entidade: ainda não há arquivos. Informe um caminho (ex.:
+     * 'assets/sounds/entity/appear.mp3') para ativar cada um.
+     */
+    entity: { appear: null, presence: null, vanish: null, exorcised: null, volume: 0.6 },
     footsteps: {
       file: 'assets/sounds/footsteps/dirt_gravel.mp3',
       /** Volume geral (0 a 1). */
@@ -209,10 +214,17 @@ export const CONFIG = deepFreeze({
     idleSwayPeriod: 18,
   },
 
-  /** Entidade de teste (fica parada na trilha, perto do início). */
+  /** Aparência da entidade. */
   entity: {
     sprite: 'ghost_01',
-    position: [1.3, 0.25, 11],
+    /** Altura em que flutua acima do chão. */
+    hover: 0.25,
+    /** Velocidade com que se volta para o jogador, em radianos por segundo. */
+    turnSpeed: 0.9,
+    /** Cor de base de cada humor (ver haunting.moods). */
+    moodTints: { still: '#ffffff', shy: '#bccbe8', elusive: '#c4e4cf' },
+    /** De tempos em tempos "encara": clareia e se estica. */
+    stare: { period: 5, duration: 1.2, stretch: 0.06 },
     /** Tamanho do volume detectado, em fração do sprite. */
     hitbox: { width: 0.7, height: 0.9 },
     /** Flutuação suave. */
@@ -222,6 +234,78 @@ export const CONFIG = deepFreeze({
     /** Desaparecimento: duração (s) e quanto ela sobe. */
     fadeDuration: 1.6,
     fadeRise: 0.9,
+  },
+
+  /** Comportamento da entidade (tempos em segundos, distâncias em unidades). */
+  haunting: {
+    /** Primeira aparição depois de começar a explorar. */
+    first: { delay: 6 },
+    /** Intervalo sorteado entre desaparecer e aparecer de novo. */
+    interval: { min: 8, max: 18 },
+    /** Nova tentativa quando não há lugar adequado. */
+    retryDelay: 1,
+    /** Quanto tempo observa antes de partir. */
+    stay: { min: 6, max: 14 },
+    /** Duração do surgimento e do desaparecimento (o de fuga é mais rápido). */
+    appearTime: 1.8,
+    disappearTime: 1.6,
+    fleeDisappearTime: 0.7,
+    /** Fração do surgimento a partir da qual pode ser mirada. */
+    targetableAt: 0.5,
+
+    /** Distância de aparição até o jogador. */
+    minDistance: 12,
+    maxDistance: 22,
+    /** Só aparece onde a neblina ainda deixa passar esta fração da imagem. */
+    minVisibility: 0.25,
+    /** Ângulo em relação ao olhar (graus): nem no centro, nem às costas. */
+    minViewAngle: 14,
+    maxViewAngle: 48,
+    /** Folga em volta de objetos e distância mínima do lugar anterior. */
+    clearance: 1,
+    minRespawnGap: 8,
+    /**
+     * Pontos que precisam estar visíveis ao surgir: [afastamento lateral, altura].
+     * Corpo (centro e lados) e cabeça.
+     */
+    sightPoints: [[0, 1.5], [-0.5, 1.5], [0.5, 1.5], [0, 2.3]],
+    /**
+     * Se nenhum lugar passar, as regras afrouxam nesta ordem (distância, objetos e
+     * centro do corpo visível valem sempre).
+     */
+    /** Quanto do raio da folhagem conta como obstrução (1 = tudo). */
+    foliageScale: 1,
+    fallbacks: [
+      { foliageScale: 0.7 },
+      { foliageScale: 0.7, sightPoints: [[0, 1.5], [0, 2.3]] },
+      { foliageScale: 0.5, sightPoints: [[0, 1.5]], maxViewAngle: 100 },
+    ],
+    /** Sorteios por tentativa, candidatos comparados e preferência pelas trilhas. */
+    attempts: 120,
+    candidates: 6,
+    pathDistance: 5,
+    pathWeight: 3,
+
+    /** Observação: some se o jogador ficar mais longe que isto... */
+    maxObserveDistance: 30,
+    /** ...ou chegar mais perto que isto (menor que o alcance da cruz). */
+    fleeDistance: 5,
+    /** Ângulo do olhar que conta como "olhando para ela" (graus). */
+    gazeAngle: 25,
+    /** Humor tímido: encarada a até shyDistance por shyAfter segundos. */
+    shyDistance: 14,
+    shyAfter: 3,
+    /** Humor esquivo: segundos sem contato visual, depois de vista. */
+    lookAwayAfter: 1.5,
+    /** Tempo de graça depois de um exorcismo interrompido. */
+    resumeGrace: 6,
+    /** Intervalo entre verificações de visão e passo fixo da lógica. */
+    senseInterval: 0.1,
+    step: 1 / 60,
+    /** Pesos dos comportamentos; o mesmo não se repete em seguida. */
+    moods: { still: 0.5, shy: 0.25, elusive: 0.25 },
+    /** Variação visual sorteada a cada aparição. */
+    look: { opacity: [0.82, 1], scale: [0.92, 1.1] },
   },
 
   exorcism: {

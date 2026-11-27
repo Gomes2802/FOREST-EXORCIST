@@ -5,6 +5,7 @@ import { CONFIG } from '../../src/config.js';
 import { PixelRenderer } from '../../src/graphics/pixelRenderer.js';
 import { SpriteManager } from '../../src/graphics/spriteManager.js';
 import { createPlayer } from '../../src/player/player.js';
+import { createRandom } from '../../src/world/forest.js';
 import {
   createCanvas, createLogger, fetchJsonFromDisk, loadBabylon, loadImageFromDisk,
 } from './fakes.js';
@@ -43,6 +44,7 @@ export function createFootstepRecorder() {
 
 export function createGame({
   loadImage = loadImageFromDisk, createEngine = createNullEngine, lock, footsteps = createFootstepRecorder(),
+  random = createRandom(7),
 } = {}) {
   const pixelRenderer = new PixelRenderer(CONFIG.pixel, { createCanvas });
   const logger = createLogger();
@@ -51,6 +53,7 @@ export function createGame({
   const input = new InputController(dom);
   const game = new Game({
     BABYLON, canvas: null, config: CONFIG, spriteManager, pixelRenderer, createEngine, input, footsteps,
+    random,
   });
   const changes = [];
   game.onModeChange = (change) => changes.push(change);

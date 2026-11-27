@@ -7,9 +7,10 @@
 
 /**
  * Há obstáculo entre os olhos e o ponto atingido? (função pura)
- * Cada obstáculo é um cilindro vertical { x, z, radius, height }.
+ * Cada obstáculo é um cilindro vertical { x, z, radius, height }; `scale`
+ * multiplica os raios.
  */
-export function isBlocked(origin, point, occluders) {
+export function isBlocked(origin, point, occluders, scale = 1) {
   const dx = point.x - origin.x;
   const dz = point.z - origin.z;
   const length2 = dx * dx + dz * dz;
@@ -17,7 +18,7 @@ export function isBlocked(origin, point, occluders) {
   return occluders.some(({ x, z, radius, height }) => {
     const t = ((x - origin.x) * dx + (z - origin.z) * dz) / length2;
     if (t <= 0 || t >= 1) return false;
-    if (Math.hypot(origin.x + dx * t - x, origin.z + dz * t - z) >= radius) return false;
+    if (Math.hypot(origin.x + dx * t - x, origin.z + dz * t - z) >= radius * scale) return false;
     return origin.y + (point.y - origin.y) * t < height;
   });
 }

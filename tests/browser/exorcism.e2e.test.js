@@ -56,8 +56,11 @@ describe('Exorcismo no Chrome', { skip }, () => {
     await page.waitFor('window.forestExorcist.game.mode === "paused"');
     await page.click('[data-action="resume-nolock"]');
     await page.waitFor('window.forestExorcist.game.mode === "playing"');
+    await summon();
     await delay(300);
   };
+  /** Etapa 4 isolada: entidade presente no lugar antigo, sem decisões próprias. */
+  const summon = () => page.evaluate('window.forestExorcist.game.haunting.summon(1.3, 11, { pinned: true })');
   /** Posiciona o jogador em (x, z) olhando para a entidade (mais um desvio). */
   const aim = async (x = 0.5, z = 6, offset = 0) => {
     await page.evaluate(`(() => {
@@ -135,7 +138,7 @@ describe('Exorcismo no Chrome', { skip }, () => {
     await press();
     await page.waitFor('window.forestExorcist.game.entity.progress > 0.4');
     const middle = await state();
-    assert.deepEqual([middle.entity, middle.aim, middle.bar], ['exorcising', 'exorcising', true]);
+    assert.deepEqual([middle.entity, middle.aim, middle.bar], ['exorcizing', 'exorcising', true]);
     assert.ok(parseInt(middle.barWidth, 10) >= 40, middle.barWidth);
     await shot('22-exorcizando');
     await page.waitFor('window.forestExorcist.game.entity.state === "exorcised"');
@@ -164,7 +167,7 @@ describe('Exorcismo no Chrome', { skip }, () => {
     await delay(700);
     const later = await state();
     assert.equal(later.progress, released.progress);
-    assert.equal(later.entity, 'present');
+    assert.equal(later.entity, 'watching');
     await press();
     await page.waitFor(`window.forestExorcist.game.entity.progress > ${released.progress + 0.1}`);
     await page.evaluate('window.forestExorcist.game.view.look(900, 0)');
@@ -172,7 +175,7 @@ describe('Exorcismo no Chrome', { skip }, () => {
     const lost = await state();
     await delay(700);
     assert.equal((await state()).progress, lost.progress);
-    assert.deepEqual([lost.entity, lost.aim, lost.cross], ['present', 'idle', 1]);
+    assert.deepEqual([lost.entity, lost.aim, lost.cross], ['watching', 'idle', 1]);
     await release();
     noProblems();
   });
@@ -200,7 +203,7 @@ describe('Exorcismo no Chrome', { skip }, () => {
     await page.click('[data-action="pause"]');
     await page.click('[data-screen="pause"] [data-action="back"]');
     const menu = await state();
-    assert.deepEqual([menu.mode, menu.entity, menu.progress, menu.cross], ['menu', 'present', 0, 0]);
+    assert.deepEqual([menu.mode, menu.entity, menu.progress, menu.cross], ['menu', 'dormant', 0, 0]);
     noProblems();
   });
 
@@ -218,6 +221,7 @@ describe('Exorcismo no Chrome', { skip }, () => {
     })()`);
     await page.click('[data-action="play"]');
     await page.waitFor('window.forestExorcist.game.mode === "playing"');
+    await summon();
     await aim();
     await press();
     await page.waitFor('window.forestExorcist.game.entity.progress > 0.2');

@@ -10,6 +10,8 @@ import { applyAtmosphere } from '../world/environment.js';
 import { createPlayer } from '../player/player.js';
 import { createCross, createSpriteCrossVisual } from '../player/cross.js';
 import { createEntity } from '../entities/entity.js';
+import { createHaunting } from '../systems/haunting.js';
+import { createEntitySounds } from '../audio/entitySounds.js';
 import { createTargeting } from '../systems/interaction.js';
 import { createExorcism } from '../systems/exorcism.js';
 import { viewDirection } from '../world/lighting.js';
@@ -18,7 +20,10 @@ import { InputController } from './input.js';
 import { createFootsteps } from '../audio/footsteps.js';
 
 export class Game {
-  constructor({ BABYLON, canvas, config, spriteManager, pixelRenderer, createEngine, input, footsteps }) {
+  constructor({
+    BABYLON, canvas, config, spriteManager, pixelRenderer, createEngine, input, footsteps,
+    sounds, random = Math.random,
+  }) {
     if (!BABYLON) throw new Error('Babylon.js não foi carregado (lib/babylon.js).');
     this.BABYLON = BABYLON;
     this.canvas = canvas;
@@ -34,6 +39,9 @@ export class Game {
     this.view = null;
     this.lights = null;
     this.entity = null;
+    this.haunting = null;
+    this.random = random;
+    this.sounds = sounds ?? createEntitySounds(config.audio.entity);
     this.cross = null;
     this.targeting = null;
     this.exorcism = null;
@@ -84,6 +92,8 @@ export class Game {
       this.forest = await this.#buildForest();
       await this.#buildEncounter();
       await this.footsteps.load();
+      await this.sounds.load();
+      await this.#warmUp();
       this.input.onPauseRequest = () => this.pause();
       this.input.onAction = (action) => {
         if (action === 'lantern' && this.mode === 'playing') this.lights.flashlight.toggle();
@@ -125,6 +135,7 @@ export class Game {
       this.footsteps.update(this.player);
       this.view.update(delta, this.player);
       this.#updateExorcism(delta);
+      this.haunting.update(delta, this.#viewer());
       this.#updateAutoQuality(delta);
     } else if (this.mode === 'menu') {
       this.view.updateIdle(delta, this.player.position);
@@ -163,6 +174,7 @@ export class Game {
     this.input.disable();
     this.player.stop();
     this.footsteps.suspend();
+    this.sounds.suspend();
     this.#setMode('paused', { notice });
   }
 
@@ -170,6 +182,7 @@ export class Game {
     this.#cancelCapture();
     this.input.disable();
     this.footsteps.suspend();
+    this.sounds.suspend();
     this.resetPlayer();
     this.#setMode('menu');
   }
@@ -179,6 +192,8 @@ export class Game {
     this.player.reset();
     this.view.reset(this.player.position);
     this.entity.reset();
+    this.haunting.reset();
+    this.sounds.event('reset');
     this.cross.reset();
     this.exorcism.reset();
     this.target = null;
@@ -246,7 +261,20 @@ export class Game {
 
   /** Ligar o áudio precisa do gesto do jogador: é chamado em play() e resume(). */
   #unlockAudio() {
-    this.footsteps.unlock().catch((error) => console.warn(`[audio] ${error.message}`));
+    for (const audio of [this.footsteps, this.sounds]) {
+      audio.unlock().catch((error) => console.warn(`[audio] ${error.message}`));
+    }
+  }
+
+  /** O que a entidade percebe do jogador. */
+  #viewer() {
+    const { camera } = this.view;
+    return {
+      x: camera.position.x,
+      z: camera.position.z,
+      yaw: camera.rotation.y,
+      eyeHeight: this.config.player.eyeHeight,
+    };
   }
 
   #capture() {
@@ -288,13 +316,26 @@ export class Game {
     this.onModeChange({ mode, control, notice });
   }
 
-  /** Cria a entidade de teste, a cruz e as regras do exorcismo. */
+  /** Cria a entidade e o seu comportamento, a cruz e as regras do exorcismo. */
   async #buildEncounter() {
     const { BABYLON, scene, config, spriteManager, pixelRenderer } = this;
     const { entity, exorcism } = config;
     await spriteManager.loadAll([entity.sprite, exorcism.cross.sprite]);
     const assets = { spriteManager, pixelRenderer };
-    this.entity = createEntity(BABYLON, scene, { settings: entity, ...assets });
+    this.entity = createEntity(BABYLON, scene, { settings: entity, timing: config.haunting, ...assets });
+    this.haunting = createHaunting({
+      entity: this.entity,
+      settings: config.haunting,
+      random: this.random,
+      onEvent: (name) => this.sounds.event(name),
+      world: () => ({
+        boundaryRadius: config.player.boundaryRadius,
+        paths: config.forest.paths,
+        fogDensity: this.scene.fogDensity,
+        occluders: this.forest.occluders,
+        blockers: this.forest.blockers,
+      }),
+    });
     this.cross = createCross(BABYLON, scene, this.view.camera, {
       settings: exorcism.cross,
       requiredRaise: exorcism.requiredRaise,
@@ -318,16 +359,17 @@ export class Game {
     );
     const expelled = this.exorcism.update(delta, { holding, readyTime, target: this.target });
     if (expelled) {
+      this.sounds.event('exorcised');
       this.target = null;
       this.messageTime = this.config.exorcism.messageDuration;
     }
-    this.cross.setExorcising(this.entity.state === 'exorcising');
+    this.cross.setExorcising(this.entity.state === 'exorcizing');
   }
 
   #hudState() {
     const { entity, target, config } = this;
     const aimed = Boolean(target?.isTargetable);
-    const exorcising = entity.state === 'exorcising';
+    const exorcising = entity.state === 'exorcizing';
     let aim = 'idle';
     if (aimed) aim = exorcising ? 'exorcising' : 'target';
     const showProgress = entity.isTargetable && entity.progress > 0 && (aimed || exorcising);
@@ -338,6 +380,41 @@ export class Game {
       message: this.messageTime > 0 ? config.exorcism.message : null,
       notice: this.notice?.text ?? null,
     };
+  }
+
+  /**
+   * Desenha a entidade e a cruz uma vez, fora de hora. Elas começam escondidas e,
+   * sem isto, o navegador só prepararia os shaders na primeira aparição e na
+   * primeira vez que a cruz sobe, travando o jogo nesses instantes.
+   */
+  async #warmUp() {
+    const { camera } = this.view;
+    const forward = viewDirection(camera.rotation.y, 0);
+    this.entity.mesh.position.set(camera.position.x + forward.x * 6, 0, camera.position.z + forward.z * 6);
+    this.entity.mesh.setEnabled(true);
+    this.cross.root.setEnabled(true);
+    // A entidade é desenhada com escala igual e diferente por eixo (a postura de
+    // cada aparição): o Babylon.js usa um shader para cada caso.
+    for (const [sx, sy] of [[1, 1], [1.05, 1.1]]) {
+      this.entity.mesh.scaling.set(sx, sy, 1);
+      await this.#waitForShaders([this.entity.mesh, this.cross.mesh]);
+      this.scene.render();
+    }
+    // Devolve o que o estado atual manda desenhar.
+    this.entity.redraw();
+    this.cross.redraw();
+  }
+
+  /**
+   * Espera limitada (no máximo ~2 s): o aquecimento nunca pode travar o jogo.
+   * Sem canvas (motor de testes) não há shaders para compilar.
+   */
+  async #waitForShaders(meshes) {
+    const attempts = this.engine.getRenderingCanvas() ? 100 : 0;
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      if (meshes.every((mesh) => mesh.material.isReady(mesh))) return;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
   }
 
   /** Mantém a lanterna e o horizonte junto do observador. */
@@ -375,6 +452,7 @@ export class Game {
       this.entity.refresh();
       this.cross.refresh();
       this.#followPlayer();
+      await this.#warmUp();
     });
     this.rebuildQueue = task.catch(() => {});
     return task;

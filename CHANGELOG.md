@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.5.0 — 2026-11-26
+
+Etapa 5: inteligência e comportamento sobrenatural.
+
+### Adicionado
+
+- Máquina de estados da entidade (adormecida, surgindo, observando, desaparecendo,
+  sendo exorcizada e exorcizada), com transições inválidas recusadas.
+- Aparições em lugares variados, com intervalos sorteados, distância limitada pela
+  neblina e linha de visão conferida (`systems/spawn.js`).
+- Três comportamentos (parada, tímida e esquiva), fuga quando o jogador chega perto
+  e tempo de graça após interromper o exorcismo (`systems/haunting.js`).
+- Orientação lenta para o jogador, olhar periódico e variação de tamanho,
+  transparência e cor.
+- Estrutura para sons da entidade, sem arquivos (`audio/entitySounds.js`).
+- Testes unitários e de navegador da etapa.
+
+### Alterado
+
+- A entidade não fica mais parada na trilha desde o início: surge sozinha após
+  alguns segundos de jogo e não aparece no menu.
+- Os estados `present` e `exorcising` viraram `watching` e `exorcizing`.
+
+### Corrigido
+
+- Engasgo na primeira aparição (~0,1 s) e na primeira vez que a cruz subia (até
+  ~1,4 s no Chrome sem placa de vídeo): os shaders são preparados no carregamento.
+
+## 0.4.2 — 2026-11-26
+
+Passos sonoros.
+
+### Adicionado
+
+- Passos com `assets/sounds/footsteps/dirt_gravel.mp3`, tocados pela distância
+  percorrida, mais frequentes e agudos na corrida, silenciados na pausa e no menu.
+- `tools/analyze-footsteps.mjs` (`npm run footsteps`) e testes do áudio.
+
 ## 0.4.1 — 2026-11-26
 
 Manutenção: repositório Git e desempenho sem placa de vídeo. Sem mudanças na

@@ -336,6 +336,24 @@ export async function createForest(BABYLON, scene, {
     height: Math.min(settings.colliderHeight, describe(placement.sprite).worldHeight * placement.scale),
   }));
 
+  /**
+   * Folhagem e objetos altos que atrapalham a visão: a entidade evita surgir
+   * atrás deles ou dentro deles.
+   */
+  const blockers = billboardPlacements
+    .filter((p) => Math.hypot(p.position[0], p.position[2]) <= settings.solidLimit)
+    .map((p) => {
+      const record = describe(p.sprite);
+      return {
+        x: p.position[0],
+        z: p.position[2],
+        // Pouco menos que a meia largura: a borda do sprite é transparente.
+        radius: record.worldWidth * p.scale * p.stretch * 0.4,
+        height: record.worldHeight * p.scale,
+      };
+    })
+    .filter((b) => b.height >= 1.2);
+
   let current = detail;
   let disposed = false;
   const culled = { x: Infinity, z: Infinity, key: '' };
@@ -379,6 +397,7 @@ export async function createForest(BABYLON, scene, {
     shadows,
     colliders,
     occluders,
+    blockers,
     placements,
     /** Distâncias de desenho em uso. */
     get distances() {
