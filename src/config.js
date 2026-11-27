@@ -4,7 +4,7 @@
  * assets/sprites/manifest.json (dados, sem código).
  */
 export const CONFIG = deepFreeze({
-  version: '0.4.1',
+  version: '0.4.2',
 
   display: {
     /** Resolução de referência. O canvas se adapta à janela. */
@@ -25,6 +25,34 @@ export const CONFIG = deepFreeze({
     alphaCutoff: 0,
     /** 0 = preserva as cores; 2..64 = níveis por canal (posterização). */
     colorLevels: 0,
+  },
+
+  /**
+   * Áudio. Os passos vêm de um arquivo com vários passos seguidos (dirt_gravel.mp3,
+   * 35 s); `steps` são os inícios de cada passo, em segundos, detectados pela forma
+   * de onda (ver tools/analyze-footsteps.mjs). Na corrida o trecho toca mais rápido.
+   */
+  audio: {
+    footsteps: {
+      file: 'assets/sounds/footsteps/dirt_gravel.mp3',
+      /** Volume geral (0 a 1). */
+      volume: 0.7,
+      steps: [
+        0.37, 1.42, 2.18, 2.88, 3.56, 4.24, 5.02, 5.68, 6.66, 7.45, 7.87, 8.30, 8.81, 9.47, 10.35,
+        10.80, 11.65, 12.76, 13.68, 14.39, 16.08, 16.87, 17.63, 18.51, 19.42, 20.47, 21.61, 22.55,
+        24.03, 26.43, 26.87, 27.50, 30.61, 31.21, 31.65, 32.77,
+      ],
+      /** Duração de cada trecho, em segundos do arquivo. */
+      clipLength: 0.4,
+      /** Distância percorrida entre dois passos, andando e correndo. */
+      walkStride: 1.3,
+      runStride: 1.7,
+      /** Velocidade de reprodução: correndo, mais rápido e mais agudo. */
+      walkRate: 1,
+      runRate: 1.35,
+      /** Variação aleatória da velocidade de cada passo (0 desliga). */
+      pitchVariation: 0.04,
+    },
   },
 
   /**

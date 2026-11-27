@@ -28,6 +28,7 @@ class GameHandler(SimpleHTTPRequestHandler):
         ".css": "text/css; charset=utf-8",
         ".html": "text/html; charset=utf-8",
         ".png": "image/png",
+        ".mp3": "audio/mpeg",
     }
 
     def end_headers(self):

@@ -15,9 +15,10 @@ import { createExorcism } from '../systems/exorcism.js';
 import { viewDirection } from '../world/lighting.js';
 import { createCameraController } from './camera.js';
 import { InputController } from './input.js';
+import { createFootsteps } from '../audio/footsteps.js';
 
 export class Game {
-  constructor({ BABYLON, canvas, config, spriteManager, pixelRenderer, createEngine, input }) {
+  constructor({ BABYLON, canvas, config, spriteManager, pixelRenderer, createEngine, input, footsteps }) {
     if (!BABYLON) throw new Error('Babylon.js não foi carregado (lib/babylon.js).');
     this.BABYLON = BABYLON;
     this.canvas = canvas;
@@ -51,6 +52,7 @@ export class Game {
     this.notice = null;
     this.autoSamples = { warm: 0, time: 0, frames: 0 };
     this.input = input ?? new InputController({ element: canvas });
+    this.footsteps = footsteps ?? createFootsteps(config.audio.footsteps);
     this.mode = 'menu';
     /** Chamado a cada mudança de modo com { mode, control, notice }. */
     this.onModeChange = () => {};
@@ -81,6 +83,7 @@ export class Game {
       await this.spriteManager.loadManifest(config.assets.spriteManifest);
       this.forest = await this.#buildForest();
       await this.#buildEncounter();
+      await this.footsteps.load();
       this.input.onPauseRequest = () => this.pause();
       this.input.onAction = (action) => {
         if (action === 'lantern' && this.mode === 'playing') this.lights.flashlight.toggle();
@@ -119,6 +122,7 @@ export class Game {
       const { dx, dy } = this.input.consumeLook();
       this.view.look(dx, dy);
       this.player.update(delta, this.input.getIntent(), this.view.yaw);
+      this.footsteps.update(this.player);
       this.view.update(delta, this.player);
       this.#updateExorcism(delta);
       this.#updateAutoQuality(delta);
@@ -135,6 +139,7 @@ export class Game {
   play() {
     if (this.mode !== 'menu') return Promise.resolve(this.mode);
     if (this.capturing) return this.capturing;
+    this.#unlockAudio();
     this.resetPlayer();
     return this.#capture();
   }
@@ -142,6 +147,7 @@ export class Game {
   /** Volta ao jogo depois da pausa. Chamar dentro de um clique. */
   resume() {
     if (this.mode !== 'paused') return Promise.resolve(this.mode);
+    this.#unlockAudio();
     return this.capturing ?? this.#capture();
   }
 
@@ -156,12 +162,14 @@ export class Game {
     if (this.mode !== 'playing') return;
     this.input.disable();
     this.player.stop();
+    this.footsteps.suspend();
     this.#setMode('paused', { notice });
   }
 
   quitToMenu() {
     this.#cancelCapture();
     this.input.disable();
+    this.footsteps.suspend();
     this.resetPlayer();
     this.#setMode('menu');
   }
@@ -234,6 +242,11 @@ export class Game {
       text: `Qualidade gráfica reduzida para ${labels[next]} (${Math.round(fps)} FPS). Ajuste em Configurações.`,
       time: auto.noticeDuration,
     };
+  }
+
+  /** Ligar o áudio precisa do gesto do jogador: é chamado em play() e resume(). */
+  #unlockAudio() {
+    this.footsteps.unlock().catch((error) => console.warn(`[audio] ${error.message}`));
   }
 
   #capture() {

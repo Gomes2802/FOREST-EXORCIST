@@ -15,20 +15,48 @@ BABYLON.Logger.LogLevels = BABYLON.Logger.ErrorLogLevel;
 
 const createNullEngine = () => new BABYLON.NullEngine({ renderWidth: 640, renderHeight: 360 });
 
-export function createGame({ loadImage = loadImageFromDisk, createEngine = createNullEngine, lock } = {}) {
+/** Passos de mentira para os testes: grava o que o jogo pediu, sem som. */
+export function createFootstepRecorder() {
+  const calls = [];
+  return {
+    calls,
+    loaded: true,
+    active: false,
+    played: 0,
+    lastRate: 0,
+    async load() {
+      return true;
+    },
+    async unlock() {
+      calls.push('unlock');
+      this.active = true;
+    },
+    suspend() {
+      calls.push('suspend');
+      this.active = false;
+    },
+    update() {
+      return 0;
+    },
+  };
+}
+
+export function createGame({
+  loadImage = loadImageFromDisk, createEngine = createNullEngine, lock, footsteps = createFootstepRecorder(),
+} = {}) {
   const pixelRenderer = new PixelRenderer(CONFIG.pixel, { createCanvas });
   const logger = createLogger();
   const spriteManager = new SpriteManager({ pixelRenderer, loadImage, fetchJson: fetchJsonFromDisk, logger });
   const dom = createFakeDom({ lock });
   const input = new InputController(dom);
   const game = new Game({
-    BABYLON, canvas: null, config: CONFIG, spriteManager, pixelRenderer, createEngine, input,
+    BABYLON, canvas: null, config: CONFIG, spriteManager, pixelRenderer, createEngine, input, footsteps,
   });
   const changes = [];
   game.onModeChange = (change) => changes.push(change);
   const press = (...codes) => codes.forEach((code) => emit(dom.window, 'keydown', { code }));
   const release = (...codes) => codes.forEach((code) => emit(dom.window, 'keyup', { code }));
-  return { game, spriteManager, logger, dom, input, changes, press, release };
+  return { game, spriteManager, logger, dom, input, changes, press, release, footsteps };
 }
 
 /** Cena vazia só com o jogador, para testar o movimento isoladamente. */
