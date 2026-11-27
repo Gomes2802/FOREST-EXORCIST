@@ -91,11 +91,11 @@ export const CONFIG = deepFreeze({
         grassNear: 7, grassFarDensity: 0.45, shadowDistance: 18,
       },
       medio: {
-        renderScale: 2, spriteDistance: 55, smallDistance: 26, grassDistance: 18,
+        renderScale: 1.5, spriteDistance: 55, smallDistance: 26, grassDistance: 18,
         grassNear: 10, grassFarDensity: 0.6, shadowDistance: 28,
       },
       alto: {
-        renderScale: 2, spriteDistance: 55, smallDistance: 34, grassDistance: 24,
+        renderScale: 1.5, spriteDistance: 55, smallDistance: 34, grassDistance: 24,
         grassNear: 16, grassFarDensity: 0.8, shadowDistance: 36,
       },
     },
@@ -124,8 +124,8 @@ export const CONFIG = deepFreeze({
 
   lighting: {
     /** Luz da noite no chão, nas trilhas e nos troncos. */
-    ambient: { color: '#6a82c4', groundColor: '#121a26', intensity: 0.62 },
-    moon: { color: '#9fb8f0', intensity: 0.5, direction: [-0.4, -1, 0.35] },
+    ambient: { color: '#4d5f8c', groundColor: '#0b1019', intensity: 0.5 },
+    moon: { color: '#8093c0', intensity: 0.4, direction: [-0.4, -1, 0.35] },
     /** Lanterna presa à câmera (tecla F). */
     lantern: {
       color: '#ffe2b0',
@@ -141,16 +141,16 @@ export const CONFIG = deepFreeze({
       startOn: true,
     },
     /** Cor da noite aplicada aos sprites (somada à lanterna). */
-    spriteTint: '#53628f',
+    spriteTint: '#3b4766',
     /** Penumbra dentro das construções (além da lamparina e da lanterna). */
-    interiorColor: '#2a2f45',
+    interiorColor: '#1c2030',
   },
 
   environment: {
     /** Neblina exponencial ao quadrado: discreta perto, total ao longe. */
-    fog: { color: '#16223a', density: 0.055 },
+    fog: { color: '#0b1426', density: 0.055 },
     sky: {
-      zenithColor: '#040713',
+      zenithColor: '#020309',
       radius: 80,
       /** Altura (0..1) até onde vale a cor da neblina e extensão do degradê. */
       horizon: 0.06,
@@ -158,13 +158,13 @@ export const CONFIG = deepFreeze({
       /** Fração da esfera desenhada, a partir do topo (o resto fica atrás do chão). */
       slice: 0.56,
     },
-    moon: { color: '#d8e0f0', radius: 2.4, offset: [-17, 24, 60] },
+    moon: { color: '#aab5cc', radius: 2.4, offset: [-17, 24, 60] },
     /** Silhuetas no horizonte; a cor mais distante é mais próxima da neblina. */
     backdrop: {
       sprite: 'backdrop_01',
       layers: [
-        { radius: 58, height: 17, color: '#152037', offset: 0.37 },
-        { radius: 50, height: 11, color: '#131d32', offset: 0 },
+        { radius: 58, height: 17, color: '#0e1628', offset: 0.37 },
+        { radius: 50, height: 11, color: '#0b1322', offset: 0 },
       ],
     },
     /** Sombra no chão: sprite e tamanho em relação à largura do objeto. */
@@ -344,7 +344,7 @@ export const CONFIG = deepFreeze({
         sprite: 'watcher_01',
         hover: 0.05,
         turnSpeed: 0.55,
-        moodTints: { shy: '#e8ecff' },
+        moodTints: { shy: '#c2c8dc' },
         float: { amplitude: 0.025, period: 6 },
         stare: { period: 8, duration: 2.2, stretch: 0.05 },
         effects: { shake: 0.04, flicker: 0.25 },
@@ -377,7 +377,7 @@ export const CONFIG = deepFreeze({
         sprite: 'wisp_01',
         hover: 0.45,
         turnSpeed: 3,
-        moodTints: { still: '#ffffff' },
+        moodTints: { still: '#d9dfea' },
         float: { amplitude: 0.18, period: 1.4 },
         stare: { period: 2, duration: 0.5, stretch: 0.18 },
         effects: { shake: 0.12, flicker: 0.45, pulseSpeed: 17, jitter: 0.14, jitterRate: 9, idleFlicker: 0.45 },
@@ -410,7 +410,7 @@ export const CONFIG = deepFreeze({
     /** Velocidade com que se volta para o jogador, em radianos por segundo. */
     turnSpeed: 0.9,
     /** Cor de base de cada humor (ver haunting.moods). */
-    moodTints: { still: '#ffffff', shy: '#bccbe8', elusive: '#c4e4cf' },
+    moodTints: { still: '#d9dfea', shy: '#97a4c0', elusive: '#9fb8a8' },
     /** De tempos em tempos "encara": clareia e se estica. */
     stare: { period: 5, duration: 1.2, stretch: 0.06 },
     /** Tamanho do volume detectado, em fração do sprite. */
