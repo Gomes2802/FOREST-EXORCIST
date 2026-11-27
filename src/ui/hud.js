@@ -14,15 +14,17 @@ export class Hud {
     this.bar = document.getElementById('exorcism');
     this.fill = document.getElementById('exorcism-fill');
     this.message = document.getElementById('hud-message');
+    this.notice = document.getElementById('hud-notice');
     this.flash = flash ? document.getElementById('hud-flash') : null;
     this.last = {};
   }
 
   /**
    * @param {{ raised: boolean, aim: 'idle'|'target'|'exorcising',
-   *   progress: number|null, message: string|null }} state
+   *   progress: number|null, message: string|null, notice?: string|null }} state
+   *   notice: aviso discreto (ex.: qualidade gráfica reduzida).
    */
-  render({ raised, aim, progress, message }) {
+  render({ raised, aim, progress, message, notice = null }) {
     const percent = progress === null ? null : Math.floor(progress * 100);
     this.#changed('raised', raised, () => {
       this.indicator.hidden = !raised;
@@ -41,6 +43,11 @@ export class Hud {
       this.message.hidden = !message;
       this.message.textContent = message ?? '';
       if (this.flash) this.flash.hidden = !message;
+    });
+    this.#changed('notice', notice, () => {
+      if (!this.notice) return;
+      this.notice.hidden = !notice;
+      this.notice.textContent = notice ?? '';
     });
   }
 

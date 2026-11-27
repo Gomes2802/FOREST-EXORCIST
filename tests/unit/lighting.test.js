@@ -26,22 +26,37 @@ test('a noite tem luz ambiente baixa, lua azulada e nenhuma sombra dinâmica', a
   assert.ok(game.scene.lights.every((l) => !l.getShadowGenerator()));
 });
 
-test('os sprites recebem só a lanterna; chão e trilhas recebem todas as luzes', async (t) => {
+test('os sprites recebem só a lanterna; chão e trilhas, a lanterna e a noite já calculada', async (t) => {
   const { game } = await ready(t);
+  const spriteMeshes = () => [
+    ...game.forest.billboards.map((b) => b.mesh),
+    ...game.forest.grass.flatMap((b) => b.chunks.map((c) => c.mesh)),
+  ];
   const check = () => {
     const { ambient, moon, lantern } = game.lights;
-    for (const base of [...game.forest.bases.values(), ...game.forest.grass]) {
-      if (base.material.disableLighting) continue;
-      assert.equal(ambient.canAffectMesh(base), false, base.name);
-      assert.equal(moon.canAffectMesh(base), false, base.name);
-      assert.equal(lantern.canAffectMesh(base), true, base.name);
+    for (const mesh of spriteMeshes()) {
+      if (mesh.material.disableLighting) continue;
+      assert.equal(ambient.canAffectMesh(mesh), false, mesh.name);
+      assert.equal(moon.canAffectMesh(mesh), false, mesh.name);
+      assert.equal(lantern.canAffectMesh(mesh), true, mesh.name);
     }
-    for (const mesh of [game.forest.ground, ...game.forest.trails]) {
-      assert.ok([ambient, moon, lantern].every((l) => l.canAffectMesh(mesh)), mesh.name);
+    // Chão e trilhas são planos: luz ambiente + luar viram cor fixa, idêntica ao
+    // que as duas luzes dariam a uma superfície voltada para cima.
+    const up = -moon.direction.normalizeToNew().y;
+    const expected = ambient.diffuse.scale(ambient.intensity).add(moon.diffuse.scale(moon.intensity * up));
+    for (const mesh of [...game.forest.groundTiles, ...game.forest.trails]) {
+      assert.equal(lantern.canAffectMesh(mesh), true, mesh.name);
+      assert.equal(ambient.canAffectMesh(mesh) || moon.canAffectMesh(mesh), false, mesh.name);
+      const emissive = mesh.material.emissiveColor;
+      for (const channel of ['r', 'g', 'b']) assert.ok(Math.abs(emissive[channel] - expected[channel]) < 1e-6, mesh.name);
+      assert.equal(mesh.material.disableLighting, false, mesh.name);
     }
+    // Troncos caídos não são planos: continuam com as três luzes.
+    for (const log of game.forest.logs) assert.ok([ambient, moon, lantern].every((l) => l.canAffectMesh(log)));
   };
   check();
-  assert.equal(game.forest.bases.get('tree_01').material.disableLighting, false);
+  const scenery = game.forest.atlases.find((a) => a.ids.has('tree_01'));
+  assert.equal(scenery.material.disableLighting, false);
   assert.equal(game.entity.mesh.material.disableLighting, true, 'brilho próprio');
   const excluded = game.lights.ambient.excludedMeshes.length;
   await game.setSpriteResolution(0.5);
@@ -59,8 +74,8 @@ test('a neblina é progressiva, fria e igual ao horizonte', async (t) => {
   assert.ok(visibility(4) > 0.9, 'neblina forte demais perto');
   assert.ok(visibility(12) > 0.5, 'a lanterna ficaria encoberta');
   assert.ok(visibility(CONFIG.forest.groundSize / 2 - CONFIG.player.boundaryRadius) < 0.02, 'fim do mapa visível');
-  assert.ok(game.forest.ground.material.fogEnabled);
-  assert.ok([...game.forest.bases.values()].every((b) => b.material.fogEnabled));
+  assert.ok(game.forest.groundTiles.every((tile) => tile.material.fogEnabled));
+  assert.ok(game.forest.billboards.every((b) => b.mesh.material.fogEnabled));
 });
 
 test('céu, lua e silhuetas do horizonte acompanham o jogador, atrás da cena', async (t) => {
@@ -77,8 +92,9 @@ test('céu, lua e silhuetas do horizonte acompanham o jogador, atrás da cena', 
     assert.ok(Math.abs(mesh.position.z - game.view.camera.position.z) < 1e-6, mesh.name);
   }
   assert.equal(game.scene.getMeshByName('moon').renderingGroupId, 0);
-  assert.equal(game.forest.ground.renderingGroupId, 1);
-  assert.ok(game.forest.objects.every((o) => o.sourceMesh.renderingGroupId === 1));
+  assert.ok(game.forest.groundTiles.every((tile) => tile.renderingGroupId === 1));
+  assert.ok(game.forest.billboards.every((b) => b.mesh.renderingGroupId === 1));
+  assert.ok(game.forest.grass.every((b) => b.chunks.every((c) => c.mesh.renderingGroupId === 1)));
 });
 
 test('a lanterna é um cone de alcance limitado, configurável', async (t) => {

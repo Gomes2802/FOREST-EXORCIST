@@ -16,10 +16,15 @@ test('inicializa o jogo e monta a cena 3D', async (t) => {
   assert.equal(game.scene.activeCamera.position.y, CONFIG.player.eyeHeight);
   assert.equal(game.scene.fogMode, BABYLON.Scene.FOGMODE_EXP2);
   assert.deepEqual(game.scene.lights.map((l) => l.name), ['ambient', 'moonlight', 'lantern']);
-  assert.ok(game.scene.getMeshByName('ground'));
+  assert.ok(game.scene.getMeshByName('ground:0,0'));
   assert.ok(game.scene.getMeshByName('moon'));
-  assert.equal(game.forest.objects.length, game.forest.placements.filter((p) => p.kind === 'billboard').length);
-  assert.ok(game.forest.objects.length > 700);
+  const sprites = game.forest.billboards.reduce((sum, batch) => sum + batch.sprites.length, 0);
+  assert.equal(sprites, game.forest.placements.filter((p) => p.kind === 'billboard').length);
+  assert.ok(sprites > 700);
+  // Só os troncos caídos usam instâncias (poucos); a vegetação fica agrupada.
+  const instances = game.scene.meshes.filter((m) => m instanceof BABYLON.InstancedMesh);
+  assert.ok(instances.every((m) => m.name.startsWith('log_')), instances.map((m) => m.name).join());
+  assert.ok(game.scene.meshes.every((m) => !m.hasThinInstances));
   assert.deepEqual(Object.keys(game.scene.activeCamera.inputs.attached), []);
   assert.equal(game.mode, 'menu');
   assert.deepEqual(logger.warnings, []);
@@ -28,23 +33,33 @@ test('inicializa o jogo e monta a cena 3D', async (t) => {
   game.renderFrame();
 });
 
-test('sprites usam billboard, instâncias e materiais coerentes', async (t) => {
+test('sprites agrupados mantêm proporção, pivô na base e materiais coerentes', async (t) => {
   const { game, spriteManager } = createGame();
   t.after(() => game.dispose());
   await game.init();
+  game.update(1 / 60);
 
-  assert.ok(game.forest.objects.every((o) => o.billboardMode === BABYLON.TransformNode.BILLBOARDMODE_Y));
-  for (const [id, base] of game.forest.bases) {
-    const record = spriteManager.get(id);
-    const size = base.getBoundingInfo().boundingBox.extendSize;
-    assert.ok(Math.abs(size.x / size.y - record.aspect) < 1e-6, `proporção de ${id}`);
-    assert.ok(Math.abs(base.getBoundingInfo().boundingBox.minimum.y) < 1e-6, `pivô de ${id}`);
-    const expected = record.definition.alphaMode === 'blend'
+  for (const batch of game.forest.billboards) {
+    batch.sprites.forEach((s) => {
+      const record = spriteManager.get(s.sprite);
+      const aspect = s.width / s.placement.stretch / s.height;
+      assert.ok(Math.abs(aspect - record.aspect) < 1e-6, `proporção de ${s.sprite}`);
+      assert.equal(s.y, s.placement.position[1], `pivô de ${s.sprite}`);
+    });
+  }
+  for (const atlas of game.forest.atlases) {
+    const { material } = atlas;
+    const expected = atlas.alphaMode === 'blend'
       ? BABYLON.Material.MATERIAL_ALPHABLEND
       : BABYLON.Material.MATERIAL_ALPHATEST;
-    assert.equal(base.material.transparencyMode, expected, id);
-    assert.equal(base.material.diffuseTexture.samplingMode, BABYLON.Texture.NEAREST_SAMPLINGMODE);
-    assert.equal(base.material.useAlphaFromDiffuseTexture, true, `transparência de ${id}`);
+    assert.equal(material.transparencyMode, expected, atlas.key);
+    assert.equal(material.diffuseTexture.samplingMode, BABYLON.Texture.NEAREST_SAMPLINGMODE);
+    assert.equal(material.diffuseTexture.noMipmap, true);
+    assert.equal(material.useAlphaFromDiffuseTexture, true, `transparência de ${atlas.key}`);
+    for (const id of atlas.ids) {
+      const record = spriteManager.get(id);
+      assert.equal(atlas.alphaMode, record.definition.alphaMode, id);
+    }
   }
 });
 

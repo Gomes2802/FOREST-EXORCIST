@@ -1,16 +1,20 @@
 /**
  * Floresta: planejamento da vegetação e montagem dos objetos na cena.
  *
- * - Árvores, arbustos, plantas e pedras: sprites em "billboard", com uma
- *   malha-base e instâncias (um draw call por sprite).
- * - Grama e sombras no chão: instâncias finas, sem custo por quadro.
+ * - Árvores, arbustos, plantas e pedras: sprites de frente para a câmera, todos
+ *   em uma malha por material, com as imagens reunidas em um atlas.
+ * - Grama e sombras no chão: malhas fixas por região, com menos grama ao longe.
  * - Troncos caídos: malha simples de baixa resolução, texturizada por um sprite.
+ *
+ * Nada disso usa instâncias: no Chrome sem placa de vídeo (SwiftShader), cada
+ * instância custa quase uma chamada de desenho (ver graphics/batches.js).
  *
  * O terreno e o horizonte ficam em environment.js.
  */
 import { createColliders, solidCircles } from './colliders.js';
 import { createEnvironment, createRandom, createValueNoise, distanceToPaths } from './environment.js';
 import { createLogMaterial, createShadowMaterial, createSpriteMaterial } from '../graphics/materials.js';
+import { buildAtlas, createBillboardBatch, createChunkedBatch } from '../graphics/batches.js';
 
 export { createRandom };
 
@@ -104,9 +108,39 @@ export function visibleDistance(environment, fogDensity) {
   return Math.max(minDistance, Math.min(maxDistance, distance));
 }
 
+/**
+ * Distâncias de desenho por categoria: o menor valor entre o que a neblina deixa
+ * ver e o limite do nível de qualidade.
+ * @param {object} detail nível de qualidade (CONFIG.graphics.presets)
+ */
+export function drawDistances(environment, fogDensity, detail) {
+  const fog = visibleDistance(environment, fogDensity);
+  const far = Math.min(fog, detail.spriteDistance);
+  return {
+    far,
+    near: Math.min(far, detail.smallDistance),
+    grass: Math.min(far, detail.grassDistance),
+    shadows: Math.min(far, detail.shadowDistance),
+  };
+}
+
+/** Fração de grama desenhada a uma distância (cheia perto, rala ao longe). */
+export function grassDensity(detail, distance) {
+  const { grassNear, grassDistance, grassFarDensity } = detail;
+  if (distance <= grassNear) return 1;
+  const t = Math.min(1, (distance - grassNear) / Math.max(1e-6, grassDistance - grassNear));
+  return 1 - t * (1 - grassFarDensity);
+}
+
+/** Número pseudoaleatório estável de uma posição (ordem da grama para o LOD). */
+function rankOf(x, z) {
+  const value = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453;
+  return value - Math.floor(value);
+}
+
 /** Carrega os recursos e monta a floresta na cena. */
 export async function createForest(BABYLON, scene, {
-  config, spriteManager, pixelRenderer, lights,
+  config, spriteManager, pixelRenderer, lights, detail,
 }) {
   const settings = config.forest;
   const { backdrop, shadow } = config.environment;
@@ -136,6 +170,7 @@ export async function createForest(BABYLON, scene, {
     backdrop: describe(backdrop.sprite),
     trees: trees.map((p) => [p.position[0], p.position[2]]),
     parent: root,
+    lights,
   });
   const disposables = [...environment.disposables];
   const adopt = (mesh) => {
@@ -145,45 +180,101 @@ export async function createForest(BABYLON, scene, {
     disposables.push(mesh.material);
     return mesh;
   };
-  const materialOptions = { pixelRenderer, tint: config.lighting.spriteTint, lit: true };
+  const { smallHeight } = config.environment.culling;
 
-  // Sprites que acompanham a câmera.
-  const bases = new Map();
-  const smallObjects = new Set();
-  const objects = ofKind('billboard').map((placement, index) => {
-    let base = bases.get(placement.sprite);
-    if (!base) {
-      const record = describe(placement.sprite);
-      base = adopt(createSpriteMesh(BABYLON, scene, record, materialOptions));
-      base.registerInstancedBuffer(BABYLON.VertexBuffer.ColorKind, 4);
-      base.instancedBuffers.color = new BABYLON.Color4(1, 1, 1, 1);
-      lights.excludeFromNight(base);
-      bases.set(placement.sprite, base);
-    }
-    const instance = base.createInstance(`${placement.sprite}#${index}`);
-    instance.position.fromArray(placement.position);
-    instance.scaling.set(placement.scale * placement.stretch, placement.scale, placement.scale);
-    instance.instancedBuffers.color = new BABYLON.Color4(placement.shade, placement.shade, placement.shade, 1);
-    instance.billboardMode = BABYLON.TransformNode.BILLBOARDMODE_Y;
-    instance.isPickable = false;
-    instance.parent = root;
-    if (base.getBoundingInfo().boundingBox.maximum.y * placement.scale < config.environment.culling.smallHeight) {
-      smallObjects.add(instance);
-    }
-    return instance;
+  // Sprites e grama: um atlas e um material para cada tipo de material.
+  const groups = new Map();
+  const groupOf = (id) => {
+    const record = describe(id);
+    const fullBright = record.status === 'fallback' || record.definition.shading === 'glow';
+    const key = `${record.definition.alphaMode}:${fullBright ? 'glow' : 'scene'}`;
+    if (!groups.has(key)) groups.set(key, { key, fullBright, alphaMode: record.definition.alphaMode, ids: new Set() });
+    groups.get(key).ids.add(id);
+    return groups.get(key);
+  };
+  const billboardPlacements = ofKind('billboard');
+  const grassPlacements = ofKind('grass');
+  for (const p of [...billboardPlacements, ...grassPlacements]) groupOf(p.sprite);
+
+  for (const group of groups.values()) {
+    const atlas = buildAtlas(
+      [...group.ids].map((id) => ({ id, canvas: describe(id).canvas })),
+      (width, height) => pixelRenderer.createCanvas(width, height),
+    );
+    group.rects = atlas.rects;
+    group.material = createSpriteMaterial(BABYLON, scene, {
+      id: `atlas:${group.key}`,
+      canvas: atlas.canvas,
+      status: 'loaded',
+      definition: { alphaMode: group.alphaMode, shading: group.fullBright ? 'glow' : 'scene' },
+    }, { pixelRenderer, tint: config.lighting.spriteTint, lit: true, doubleSided: true });
+    group.atlas = atlas.canvas;
+    disposables.push(group.material);
+  }
+
+  const billboards = [...groups.values()].map((group) => {
+    const items = billboardPlacements.filter((p) => group.ids.has(p.sprite));
+    const batch = createBillboardBatch(BABYLON, scene, {
+      name: `sprites:${group.key}`,
+      material: group.material,
+      fov: config.camera.fov,
+      sprites: items.map((p) => {
+        const record = describe(p.sprite);
+        const height = record.worldHeight * p.scale;
+        return {
+          placement: p,
+          sprite: p.sprite,
+          x: p.position[0],
+          y: p.position[1],
+          z: p.position[2],
+          width: record.worldWidth * p.scale * p.stretch,
+          height,
+          shade: p.shade,
+          rect: group.rects.get(p.sprite),
+          small: height < smallHeight,
+        };
+      }),
+    });
+    adopt(batch.mesh);
+    if (!group.fullBright) lights.excludeFromNight(batch.mesh);
+    return batch;
   });
 
-  const grassFilters = [];
-  const grass = [...groupBySprite(ofKind('grass'))].map(([id, items]) => {
-    const mesh = adopt(createGrassMesh(BABYLON, scene, describe(id), materialOptions));
-    lights.excludeFromNight(mesh);
-    const nearby = setThinInstances(BABYLON, mesh, items, (p) => ({
-      scale: [p.scale * p.stretch, p.scale, p.scale * p.stretch],
-      position: p.position,
-      color: [p.shade, p.shade, p.shade, 1],
-    }));
-    grassFilters.push(nearby);
-    return mesh;
+  // Grama: dois planos cruzados por tufo, agrupados por região.
+  const grassGroups = [...groups.values()].filter((g) => grassPlacements.some((p) => g.ids.has(p.sprite)));
+  const grass = grassGroups.map((group) => {
+    const batch = createChunkedBatch(BABYLON, scene, {
+      name: `grass:${group.key}`,
+      material: group.material,
+      chunkSize: config.environment.culling.grassChunk,
+      vertices: 8,
+      indices: [0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7],
+      items: grassPlacements.filter((p) => group.ids.has(p.sprite))
+        .map((p) => ({ placement: p, x: p.position[0], z: p.position[2], rank: rankOf(p.position[0], p.position[2]) })),
+      write({ placement: p }, out) {
+        const record = describe(p.sprite);
+        const { u0, u1, v0, v1 } = group.rects.get(p.sprite);
+        const half = (record.worldWidth * p.scale * p.stretch) / 2;
+        const top = record.worldHeight * p.scale;
+        const [x, y, z] = p.position;
+        const c = Math.cos(p.yaw);
+        const sn = Math.sin(p.yaw);
+        // Eixo local X e Z do tufo, girados pelo yaw.
+        for (const [ax, az] of [[c, -sn], [sn, c]]) {
+          for (const [side, up] of [[-1, 0], [1, 0], [1, 1], [-1, 1]]) {
+            out.positions.push(x + ax * half * side, y + top * up, z + az * half * side);
+            out.normals.push(0, 1, 0);
+            out.uvs.push(side < 0 ? u0 : u1, up ? v1 : v0);
+            out.colors.push(p.shade, p.shade, p.shade, 1);
+          }
+        }
+      },
+    });
+    for (const chunk of batch.chunks) {
+      adopt(chunk.mesh);
+      lights.excludeFromNight(chunk.mesh);
+    }
+    return batch;
   });
 
   const logs = [];
@@ -204,14 +295,32 @@ export async function createForest(BABYLON, scene, {
     });
   }
 
-  const shadows = adopt(createShadowMesh(BABYLON, scene, describe(shadow.sprite), pixelRenderer));
+  // Sombras: manchas no chão, agrupadas por região.
+  const shadowRecord = describe(shadow.sprite);
+  const shadowMaterial = createShadowMaterial(BABYLON, scene, shadowRecord, { pixelRenderer });
+  disposables.push(shadowMaterial);
   const casters = placements.filter((p) => p.kind === 'billboard' && p.position[1] === 0
     && Math.hypot(p.position[0], p.position[2]) <= settings.solidLimit
     && describe(p.sprite).definition.collisionRadius > 0);
-  setThinInstances(BABYLON, shadows, casters, (p) => {
-    const size = Math.max(1, describe(p.sprite).worldWidth * p.scale * shadow.size);
-    return { scale: [size, 1, size], position: [p.position[0], 0.025, p.position[2]] };
+  const shadows = createChunkedBatch(BABYLON, scene, {
+    name: 'shadows',
+    material: shadowMaterial,
+    chunkSize: config.environment.culling.shadowChunk,
+    vertices: 4,
+    indices: [0, 1, 2, 0, 2, 3],
+    items: casters.map((p) => ({ placement: p, x: p.position[0], z: p.position[2], rank: 0 })),
+    write({ placement: p }, out) {
+      const half = Math.max(1, describe(p.sprite).worldWidth * p.scale * shadow.size) / 2;
+      const c = Math.cos(p.yaw) * half;
+      const sn = Math.sin(p.yaw) * half;
+      for (const [a, b, u, v] of [[-1, -1, 0, 0], [1, -1, 1, 0], [1, 1, 1, 1], [-1, 1, 0, 1]]) {
+        out.positions.push(p.position[0] + a * c + b * sn, 0.025, p.position[2] - a * sn + b * c);
+        out.normals.push(0, 1, 0);
+        out.uvs.push(u, v);
+      }
+    },
   });
+  for (const chunk of shadows.chunks) adopt(chunk.mesh);
 
   const colliders = createColliders(BABYLON, scene, placements, {
     spriteManager,
@@ -227,42 +336,73 @@ export async function createForest(BABYLON, scene, {
     height: Math.min(settings.colliderHeight, describe(placement.sprite).worldHeight * placement.scale),
   }));
 
-  const culled = { x: Infinity, z: Infinity, distance: 0 };
-  /** Desliga o desenho do que está escondido pela neblina (colisões continuam). */
-  function cull(position) {
-    const distance = visibleDistance(config.environment, scene.fogDensity);
+  let current = detail;
+  let disposed = false;
+  const culled = { x: Infinity, z: Infinity, key: '' };
+  const view = { x: 0, z: 0, yaw: 0, pitch: 0 };
+  let distances = drawDistances(config.environment, scene.fogDensity, current);
+
+  /**
+   * Desliga o desenho do que está escondido pela neblina, longe demais para o
+   * nível de qualidade ou fora da vista. Colisões e mira não mudam.
+   */
+  function cull(position, rotation) {
+    distances = drawDistances(config.environment, scene.fogDensity, current);
+    Object.assign(view, { x: position.x, z: position.z, yaw: rotation?.y ?? 0, pitch: rotation?.x ?? 0 });
+    for (const batch of billboards) batch.update(view, distances);
+
+    const key = JSON.stringify(distances);
     const moved = Math.hypot(position.x - culled.x, position.z - culled.z);
-    if (moved < config.environment.culling.step && distance === culled.distance) return;
-    Object.assign(culled, { x: position.x, z: position.z, distance });
-    for (const object of [...objects, ...logs]) {
-      const limit = smallObjects.has(object)
-        ? Math.min(distance, config.environment.culling.smallDistance) : distance;
-      const visible = Math.hypot(object.position.x - position.x, object.position.z - position.z) <= limit;
-      if (object.isEnabled(false) !== visible) object.setEnabled(visible);
+    if (moved < config.environment.culling.step && key === culled.key) return;
+    Object.assign(culled, { x: position.x, z: position.z, key });
+    for (const log of logs) {
+      const visible = Math.hypot(log.position.x - position.x, log.position.z - position.z) <= distances.far;
+      if (log.isEnabled(false) !== visible) log.setEnabled(visible);
     }
-    // A grama é pequena e numerosa: some bem antes das árvores.
-    for (const filter of grassFilters) filter(position, Math.min(distance, config.environment.culling.grassDistance));
+    for (const batch of grass) batch.update(position, distances.grass, (d) => grassDensity(current, d));
+    shadows.update(position, distances.shadows);
   }
 
   return {
     root,
     ground: environment.ground,
+    groundTiles: environment.groundTiles,
     trails: environment.trails,
     sky: environment.sky,
     backdrops: environment.backdrops,
-    bases,
-    objects,
+    /** Uma malha de sprites por material (ver graphics/batches.js). */
+    billboards,
+    /** Atlas de cada material: { key, ids, rects, material, atlas }. */
+    atlases: [...groups.values()],
     grass,
     logs,
     shadows,
     colliders,
     occluders,
     placements,
-    follow(position) {
+    /** Distâncias de desenho em uso. */
+    get distances() {
+      return { ...distances };
+    },
+    get detail() {
+      return current;
+    },
+    /** Troca o nível de qualidade sem recriar a floresta. */
+    setDetail(next) {
+      current = next;
+      culled.key = '';
+    },
+    /**
+     * @param {{ x: number, y: number, z: number }} position câmera
+     * @param {{ x: number, y: number }} [rotation] pitch e yaw da câmera
+     */
+    follow(position, rotation) {
+      if (disposed) return;
       environment.follow(position);
-      cull(position);
+      cull(position, rotation);
     },
     dispose() {
+      disposed = true;
       // O nó raiz elimina as malhas; materiais e texturas são liberados à parte.
       for (const material of new Set(disposables)) material?.dispose(false, true);
       root.dispose();
@@ -277,88 +417,6 @@ function groupBySprite(placements) {
     groups.get(placement.sprite).push(placement);
   }
   return groups;
-}
-
-/**
- * Grava posição, escala, giro (e cor opcional) de todas as instâncias finas.
- * @returns {(center: { x: number, z: number }, distance: number) => void} função
- *   que passa a desenhar somente as instâncias próximas de um ponto.
- */
-function setThinInstances(BABYLON, mesh, placements, transform) {
-  const matrices = new Float32Array(placements.length * 16);
-  const colors = [];
-  placements.forEach((placement, index) => {
-    const { scale, position, color } = transform(placement);
-    BABYLON.Matrix.Compose(
-      new BABYLON.Vector3(...scale),
-      BABYLON.Quaternion.RotationAxis(BABYLON.Axis.Y, placement.yaw),
-      new BABYLON.Vector3(...position),
-    ).copyToArray(matrices, index * 16);
-    if (color) colors.push(...color);
-  });
-  if (placements.length === 0) {
-    mesh.isVisible = false;
-    return () => {};
-  }
-  // Os buffers "vivos" recebem o subconjunto visível; os completos ficam à parte.
-  const liveMatrices = matrices.slice();
-  const liveColors = Float32Array.from(colors);
-  mesh.thinInstanceSetBuffer('matrix', liveMatrices, 16, false);
-  if (colors.length > 0) mesh.thinInstanceSetBuffer('color', liveColors, 4, false);
-  // As instâncias cercam o jogador: não vale testar a caixa do conjunto.
-  mesh.alwaysSelectAsActiveMesh = true;
-
-  return (center, distance) => {
-    let count = 0;
-    placements.forEach(({ position }, index) => {
-      if (Math.hypot(position[0] - center.x, position[2] - center.z) > distance) return;
-      liveMatrices.set(matrices.subarray(index * 16, index * 16 + 16), count * 16);
-      if (colors.length > 0) {
-        for (let c = 0; c < 4; c += 1) liveColors[count * 4 + c] = colors[index * 4 + c];
-      }
-      count += 1;
-    });
-    mesh.thinInstanceCount = count;
-    mesh.thinInstanceBufferUpdated('matrix');
-    if (colors.length > 0) mesh.thinInstanceBufferUpdated('color');
-    mesh.setEnabled(count > 0);
-  };
-}
-
-/** Plano vertical com o pivô na base, no tamanho proporcional à imagem. */
-function createSpriteMesh(BABYLON, scene, record, materialOptions) {
-  const mesh = BABYLON.MeshBuilder.CreatePlane(
-    `base:${record.id}`,
-    { width: record.worldWidth, height: record.worldHeight },
-    scene,
-  );
-  mesh.bakeTransformIntoVertices(BABYLON.Matrix.Translation(0, record.worldHeight / 2, 0));
-  mesh.material = createSpriteMaterial(BABYLON, scene, record, materialOptions);
-  mesh.isVisible = false; // Só as instâncias aparecem.
-  return mesh;
-}
-
-/**
- * Dois planos cruzados, vistos dos dois lados. As normais apontam para cima, para
- * a lanterna iluminar a grama como ilumina o chão.
- */
-function createGrassMesh(BABYLON, scene, record, materialOptions) {
-  const half = record.worldWidth / 2;
-  const top = record.worldHeight;
-  const data = new BABYLON.VertexData();
-  Object.assign(data, {
-    positions: [
-      -half, 0, 0, half, 0, 0, half, top, 0, -half, top, 0,
-      0, 0, -half, 0, 0, half, 0, top, half, 0, top, -half,
-    ],
-    indices: [0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7],
-    normals: Array.from({ length: 8 }, () => [0, 1, 0]).flat(),
-    uvs: [0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1],
-  });
-  const mesh = new BABYLON.Mesh(`grass:${record.id}`, scene);
-  data.applyToMesh(mesh);
-  mesh.material = createSpriteMaterial(BABYLON, scene, record, { ...materialOptions, doubleSided: true });
-  return mesh;
 }
 
 /**
@@ -406,12 +464,5 @@ function createLogMesh(BABYLON, scene, record, materialOptions) {
   const mesh = new BABYLON.Mesh(`log:${record.id}`, scene);
   data.applyToMesh(mesh);
   mesh.material = createLogMaterial(BABYLON, scene, record, materialOptions);
-  return mesh;
-}
-
-/** Mancha escura deitada no chão, sob árvores e pedras (sombra sem custo de luz). */
-function createShadowMesh(BABYLON, scene, record, pixelRenderer) {
-  const mesh = BABYLON.MeshBuilder.CreateGround('shadows', { width: 1, height: 1 }, scene);
-  mesh.material = createShadowMaterial(BABYLON, scene, record, { pixelRenderer });
   return mesh;
 }

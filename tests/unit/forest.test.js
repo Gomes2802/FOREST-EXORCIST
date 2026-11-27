@@ -3,7 +3,7 @@ import test, { after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { CONFIG } from '../../src/config.js';
 import { distanceToPaths, samplePath, createValueNoise } from '../../src/world/environment.js';
-import { planForest, visibleDistance } from '../../src/world/forest.js';
+import { drawDistances, grassDensity, planForest } from '../../src/world/forest.js';
 import { solidCircles } from '../../src/world/colliders.js';
 import { createGame, intent } from '../helpers/world.js';
 
@@ -13,6 +13,8 @@ const TREES = ['tree', 'tree_small', 'dead_tree'];
 
 let game;
 let spriteManager;
+// As posições da malha são Float32: erro de arredondamento ~1e-6.
+const close = (a, b, tolerance = 1e-4) => assert.ok(Math.abs(a - b) <= tolerance, `${a} x ${b}`);
 let circles;
 
 before(async () => {
@@ -40,10 +42,17 @@ test('as trilhas são contínuas, passam pelo início e fazem curvas', () => {
 });
 
 test('o terreno tem chão, trilhas, variação de tom e ultrapassa a área alcançável', () => {
-  const { ground, trails } = game.forest;
+  const { groundTiles, trails } = game.forest;
   assert.ok(settings.groundSize / 2 > BOUNDARY + 35);
   assert.equal(trails.length, settings.paths.length);
-  for (const mesh of [ground, ...trails]) {
+  assert.equal(groundTiles.length, settings.groundTiles ** 2);
+  // As regiões cobrem o terreno inteiro, sem buracos.
+  const area = groundTiles.reduce((sum, tile) => {
+    const { minimum, maximum } = tile.getBoundingInfo().boundingBox;
+    return sum + (maximum.x - minimum.x) * (maximum.z - minimum.z);
+  }, 0);
+  assert.ok(Math.abs(area - settings.groundSize ** 2) < 1e-3);
+  for (const mesh of [...groundTiles, ...trails]) {
     const colors = mesh.getVerticesData('color');
     const tones = new Set();
     for (let i = 0; i < colors.length; i += 4) tones.add(colors[i].toFixed(2));
@@ -52,7 +61,8 @@ test('o terreno tem chão, trilhas, variação de tom e ultrapassa a área alcan
     const positions = mesh.getVerticesData('position');
     for (let i = 1; i < positions.length; i += 3) assert.ok(Math.abs(positions[i]) < 0.05);
   }
-  assert.notEqual(trails[0].material.diffuseTexture, ground.material.diffuseTexture);
+  assert.notEqual(trails[0].material.diffuseTexture, groundTiles[0].material.diffuseTexture);
+  assert.ok(groundTiles.every((tile) => tile.material === groundTiles[0].material), 'um material para o chão');
 });
 
 test('o ruído é determinístico, contínuo e limitado', () => {
@@ -162,43 +172,136 @@ test('troncos caídos são sólidos em todo o comprimento', () => {
   }
 });
 
-test('sprites distantes deixam de ser desenhados, sem afetar colisões', () => {
+/** Sprites de todas as malhas agrupadas, com o estado de desenho. */
+const allSprites = () => game.forest.billboards.flatMap(
+  (batch) => batch.sprites.map((sprite, i) => ({ ...sprite, drawn: batch.visible[i] === 1 })),
+);
+
+test('sprites longe ou fora da vista deixam de ser desenhados, sem afetar colisões', () => {
   const { forest } = game;
   const colliders = forest.colliders.length;
-  const far = () => {
-    const limit = visibleDistance(CONFIG.environment, game.scene.fogDensity);
-    forest.follow({ x: 0, y: 1.7, z: 0 });
-    const { smallHeight, smallDistance } = CONFIG.environment.culling;
-    for (const object of forest.objects) {
-      const distance = Math.hypot(object.position.x, object.position.z);
-      const height = object.sourceMesh.getBoundingInfo().boundingBox.maximum.y * object.scaling.y;
-      const reach = height < smallHeight ? Math.min(limit, smallDistance) : limit;
-      assert.equal(object.isEnabled(), distance <= reach, `${object.name} a ${distance.toFixed(1)}`);
+  const look = (yaw) => {
+    forest.follow({ x: 0, y: 1.7, z: 0 }, { x: 0, y: yaw });
+    const limits = forest.distances;
+    const forward = { x: Math.sin(yaw), z: Math.cos(yaw) };
+    for (const s of allSprites()) {
+      const distance = Math.hypot(s.x, s.z);
+      const reach = s.small ? limits.near : limits.far;
+      if (distance > reach) assert.equal(s.drawn, false, `${s.sprite} a ${distance.toFixed(1)}: longe`);
+      const ahead = s.x * forward.x + s.z * forward.z;
+      const side = Math.abs(s.x * forward.z - s.z * forward.x);
+      // Bem no centro da vista e ao alcance: sempre desenhado.
+      if (distance <= reach && ahead > 2 && side < ahead * 0.5) assert.equal(s.drawn, true, `${s.sprite} sumiu`);
+      // Atrás do jogador: nunca desenhado.
+      if (ahead < -(s.width / 2 + 1.5)) assert.equal(s.drawn, false, `${s.sprite} atrás`);
     }
-    return forest.objects.filter((o) => o.isEnabled()).length;
+    return allSprites().filter((s) => s.drawn).length;
   };
-  const normal = far();
-  assert.ok(normal < forest.objects.length);
+  const normal = look(0);
+  assert.ok(normal > 50 && normal < allSprites().length / 2, `${normal} desenhados`);
+  assert.ok(look(Math.PI) > 50, 'olhando para trás também há floresta');
   game.setFogDensity(0.085);
-  assert.ok(far() < normal, 'neblina densa deve desenhar menos');
+  assert.ok(look(0) < normal, 'neblina densa deve desenhar menos');
   game.setFogDensity(CONFIG.environment.fog.density);
   assert.ok(forest.colliders.every((c) => c.isEnabled()));
   assert.equal(forest.colliders.length, colliders);
 });
 
-test('a grama usa uma malha por sprite e desenha somente a que está perto', () => {
+test('sprites agrupados: de frente para a câmera, no tamanho e na proporção da imagem', () => {
   const { forest } = game;
-  assert.equal(forest.grass.length, spriteManager.idsByGroup('grass').length);
-  const limit = CONFIG.environment.culling.grassDistance;
-  for (const center of [{ x: 0, z: 0 }, { x: -20, z: 15 }, { x: 0, z: 0 }]) {
-    forest.follow({ ...center, y: 1.7 });
-    const near = ofGroup('grass').filter(
-      (p) => Math.hypot(p.position[0] - center.x, p.position[2] - center.z) <= limit,
-    ).length;
-    const drawn = forest.grass.reduce((sum, mesh) => sum + mesh.thinInstanceCount, 0);
-    assert.equal(drawn, near);
-    assert.ok(drawn > 100 && drawn < ofGroup('grass').length);
+  const yaw = 0.7;
+  forest.follow({ x: 0, y: 1.7, z: 0 }, { x: 0, y: yaw });
+  const right = { x: Math.cos(yaw), z: -Math.sin(yaw) };
+  let checked = 0;
+  for (const batch of forest.billboards) {
+    const positions = batch.mesh.getVerticesData('position');
+    const normals = batch.mesh.getVerticesData('normal');
+    batch.sprites.forEach((s, i) => {
+      if (!batch.visible[i]) return;
+      const p = positions.slice(i * 12, i * 12 + 12);
+      const record = spriteManager.get(s.sprite);
+      // Base no chão do objeto, largura ao longo do lado direito da câmera.
+      close(p[1], s.y);
+      close(p[7], s.y + s.height);
+      close(Math.hypot(p[3] - p[0], p[5] - p[2]), s.width);
+      close(((p[3] - p[0]) * right.z - (p[5] - p[2]) * right.x), 0, 1e-4);
+      close(s.height / record.worldHeight, s.width / (record.worldWidth * s.placement.stretch), 1e-6);
+      // Normal voltada para a câmera.
+      close(normals[i * 12] * Math.sin(yaw) + normals[i * 12 + 2] * Math.cos(yaw), -1, 1e-5);
+      checked += 1;
+    });
   }
+  assert.ok(checked > 50);
+});
+
+test('cada material de sprite usa um único atlas, com recortes exatos', () => {
+  const { forest } = game;
+  const ids = new Set();
+  for (const atlas of forest.atlases) {
+    for (const id of atlas.ids) {
+      assert.ok(!ids.has(id), `${id} em dois atlas`);
+      ids.add(id);
+      const record = spriteManager.get(id);
+      const rect = atlas.rects.get(id);
+      assert.deepEqual([rect.width, rect.height], [record.textureWidth, record.textureHeight], id);
+      assert.ok(rect.u0 >= 0 && rect.u1 <= 1 && rect.v0 >= 0 && rect.v1 <= 1 && rect.u0 < rect.u1 && rect.v0 < rect.v1);
+    }
+  }
+  assert.ok(ids.has('tree_01') && ids.has('grass_01'));
+  // Os sprites de cenário (não os de brilho próprio) cabem em um só material.
+  assert.equal(forest.atlases.filter((a) => !a.fullBright).length, 1);
+  assert.equal(forest.billboards.length, forest.atlases.filter((a) => [...a.ids].some((id) => !id.startsWith('grass'))).length);
+});
+
+test('a grama fica em regiões, cheia perto e mais rala ao longe, e some na distância', () => {
+  const { forest } = game;
+  const detail = forest.detail;
+  const total = ofGroup('grass').length;
+  const all = forest.grass.flatMap((batch) => batch.chunks);
+  assert.equal(all.reduce((sum, c) => sum + c.items.length, 0), total);
+  assert.ok(all.length > 20, 'regiões demais grandes');
+  for (const center of [{ x: 0, z: 0 }, { x: -20, z: 15 }]) {
+    forest.follow({ ...center, y: 1.7 }, { x: 0, y: 0 });
+    const reach = forest.distances.grass;
+    for (const chunk of all) {
+      const half = CONFIG.environment.culling.grassChunk / 2;
+      const near = Math.hypot(Math.max(0, Math.abs(center.x - chunk.x) - half), Math.max(0, Math.abs(center.z - chunk.z) - half));
+      const expected = near > reach ? 0 : Math.ceil(chunk.items.length * grassDensity(detail, near));
+      assert.equal(chunk.drawn, expected);
+      assert.equal(chunk.mesh.isEnabled(false), expected > 0);
+      if (expected > 0) assert.equal(chunk.mesh.subMeshes[0].indexCount, expected * 12);
+      // Perto do jogador, nenhum tufo é removido.
+      if (near <= detail.grassNear) assert.equal(chunk.drawn, chunk.items.length);
+    }
+    const drawn = forest.grass.reduce((sum, batch) => sum + batch.drawnCount, 0);
+    assert.ok(drawn > 100 && drawn < total, `${drawn} de ${total}`);
+  }
+  assert.equal(grassDensity(detail, 0), 1);
+  assert.ok(Math.abs(grassDensity(detail, detail.grassDistance) - detail.grassFarDensity) < 1e-9);
+});
+
+test('sombras no chão ficam em regiões e somem ao longe', () => {
+  const { forest } = game;
+  forest.follow({ x: 0, y: 1.7, z: 0 }, { x: 0, y: 0 });
+  const chunks = forest.shadows.chunks;
+  assert.ok(chunks.length > 4);
+  const reach = forest.distances.shadows;
+  const half = CONFIG.environment.culling.shadowChunk / 2;
+  for (const chunk of chunks) {
+    const near = Math.hypot(Math.max(0, Math.abs(chunk.x) - half), Math.max(0, Math.abs(chunk.z) - half));
+    assert.equal(chunk.mesh.isEnabled(false), near <= reach);
+  }
+});
+
+test('distâncias de desenho respeitam a neblina e o nível de qualidade', () => {
+  const { presets } = CONFIG.graphics;
+  const fog = CONFIG.environment.fog.density;
+  const levels = CONFIG.graphics.levels.map((name) => drawDistances(CONFIG.environment, fog, presets[name]));
+  for (let i = 1; i < levels.length; i += 1) {
+    for (const key of ['far', 'near', 'grass', 'shadows']) assert.ok(levels[i][key] >= levels[i - 1][key], key);
+  }
+  for (const d of levels) assert.ok(d.near <= d.far && d.grass <= d.far && d.shadows <= d.far);
+  assert.ok(drawDistances(CONFIG.environment, 0.085, presets.alto).far < levels.at(-1).far);
 });
 
 test('desempenho básico: planejamento e atualização por quadro são rápidos', () => {

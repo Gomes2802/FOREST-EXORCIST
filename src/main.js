@@ -18,6 +18,7 @@ const menu = new Menu(document, {
   onMenu: () => game.quitToMenu(),
   onSetting: async (name, value) => {
     if (name === 'renderScale') game.setRenderScale(value);
+    else if (name === 'quality') game.setQuality(value);
     else if (name === 'fogDensity') game.setFogDensity(value);
     else if (name === 'resolutionScale') {
       menu.setReady(false);
@@ -53,13 +54,19 @@ async function boot() {
   });
   app.game = game;
   game.onModeChange = (state) => menu.showGameState(state);
+  // A qualidade também muda a resolução: o menu acompanha.
+  game.onQualityChange = ({ quality, renderScale }) => menu.setValues({ quality, renderScale });
   const hud = new Hud(document, { flash: CONFIG.exorcism.flash });
   game.onHud = (state) => hud.render(state);
   await game.init();
+  // Atalho para laboratórios: ?qualidade=muito-baixo (ver start.sh --qualidade).
+  const requested = new URLSearchParams(window.location.search).get('qualidade');
+  if (requested && !game.setQuality(requested)) console.warn(`[graficos] qualidade desconhecida: ${requested}`);
   game.start();
   window.addEventListener('resize', () => game.resize());
 
   menu.setValues({
+    quality: game.quality,
     renderScale: pixelRenderer.settings.renderScale,
     resolutionScale: pixelRenderer.settings.resolutionScale,
     fogDensity: CONFIG.environment.fog.density,

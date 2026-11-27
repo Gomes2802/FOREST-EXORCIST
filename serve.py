@@ -82,12 +82,19 @@ def main():
     parser = argparse.ArgumentParser(description="Servidor local do Forest Exorcist.")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT, help="porta (0 = automática)")
     parser.add_argument("--no-browser", action="store_true", help="não abrir o navegador")
+    parser.add_argument(
+        "--qualidade",
+        choices=["auto", "alto", "medio", "baixo", "muito-baixo"],
+        help="qualidade gráfica inicial (padrão: auto)",
+    )
     options = parser.parse_args()
 
     directory = Path(__file__).resolve().parent
     attempts = 1 if options.port == 0 else PORT_ATTEMPTS
     with create_server(directory, options.port, attempts) as server:
         url = f"http://{HOST}:{server.server_address[1]}/"
+        if options.qualidade:
+            url += f"?qualidade={options.qualidade}"
         print(f"Forest Exorcist em {url}", flush=True)
         print("Pressione Ctrl+C para encerrar.", flush=True)
         if not options.no_browser:

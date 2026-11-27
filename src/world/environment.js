@@ -101,10 +101,10 @@ export function applyAtmosphere(BABYLON, scene, settings) {
  * @param {{ config: object, pixelRenderer: object, images: { ground: any, path: any },
  *   backdrop: object, trees: number[][], parent: object }} options
  *   backdrop é o registro do sprite de silhuetas; trees são as posições que
- *   escurecem o chão.
+ *   escurecem o chão; lights (opcional) recebe a luz da noite já calculada.
  */
 export function createEnvironment(BABYLON, scene, {
-  config, pixelRenderer, images, backdrop, trees, parent,
+  config, pixelRenderer, images, backdrop, trees, parent, lights,
 }) {
   const { forest, environment } = config;
   const tone = createGroundTone(forest.seed, trees);
@@ -118,12 +118,20 @@ export function createEnvironment(BABYLON, scene, {
   // Texturas repetidas precisam ter lados em potência de 2 no WebGL 1.
   const tiled = (image) => pixelRenderer.pixelate(image, { powerOfTwo: true });
 
-  const ground = adopt(createGround(BABYLON, scene, forest, tone));
-  ground.material = createSurfaceMaterial(BABYLON, scene, 'ground', tiled(images.ground), {
+  // Chão em regiões: as que ficam fora da vista não são desenhadas.
+  const ground = new BABYLON.TransformNode('ground', scene);
+  ground.parent = parent;
+  const groundMaterial = createSurfaceMaterial(BABYLON, scene, 'ground', tiled(images.ground), {
     pixelRenderer,
-    repeat: forest.groundSize / forest.groundTileSize,
+    repeat: 1, // As UVs já estão em coordenadas do mundo.
   });
-  disposables.push(ground.material);
+  disposables.push(groundMaterial);
+  const groundTiles = createGroundTiles(BABYLON, scene, forest, tone).map((tile) => {
+    tile.parent = ground;
+    tile.isPickable = false;
+    tile.material = groundMaterial;
+    return tile;
+  });
 
   const pathCanvas = tiled(images.path);
   const trails = forest.paths.map((path, index) => {
@@ -148,13 +156,17 @@ export function createEnvironment(BABYLON, scene, {
     createBackdrop(BABYLON, scene, layer, index, backdrop, backdropCanvas, pixelRenderer),
   ));
 
-  for (const mesh of [ground, ...trails]) {
+  for (const mesh of [...groundTiles, ...trails]) {
     mesh.renderingGroupId = 1;
     mesh.freezeWorldMatrix();
+    // Superfícies planas: luar e luz ambiente entram como cor fixa (mesmo resultado).
+    lights?.bakeNight(mesh);
   }
 
   return {
+    /** Nó com as regiões do chão (setEnabled liga e desliga todas). */
     ground,
+    groundTiles,
     trails,
     sky,
     moon,
@@ -208,20 +220,36 @@ function createGroundTone(seed, trees) {
   };
 }
 
-function createGround(BABYLON, scene, settings, tone) {
-  // Malha subdividida de propósito: com triângulos gigantes, a renderização por
-  // software do Chrome desenha o chão chapado e por cima dos sprites. Os vértices
-  // também guardam a variação de tom.
-  const ground = BABYLON.MeshBuilder.CreateGround(
-    'ground',
-    { width: settings.groundSize, height: settings.groundSize, subdivisions: settings.groundSubdivisions },
-    scene,
-  );
-  const positions = ground.getVerticesData(BABYLON.VertexBuffer.PositionKind);
-  const colors = [];
-  for (let i = 0; i < positions.length; i += 3) colors.push(...tone(positions[i], positions[i + 2]));
-  ground.setVerticesData(BABYLON.VertexBuffer.ColorKind, colors);
-  return ground;
+/**
+ * Chão em groundTiles x groundTiles regiões. Malha subdividida de propósito: com
+ * triângulos gigantes, a renderização por software do Chrome desenha o chão
+ * chapado e por cima dos sprites. Os vértices também guardam a variação de tom,
+ * e as UVs seguem as coordenadas do mundo (sem emendas entre regiões).
+ */
+function createGroundTiles(BABYLON, scene, settings, tone) {
+  const tiles = settings.groundTiles;
+  const size = settings.groundSize / tiles;
+  const subdivisions = Math.max(1, Math.round(settings.groundSubdivisions / tiles));
+  const meshes = [];
+  for (let i = 0; i < tiles; i += 1) {
+    for (let j = 0; j < tiles; j += 1) {
+      const mesh = BABYLON.MeshBuilder.CreateGround(`ground:${i},${j}`, { width: size, height: size, subdivisions }, scene);
+      const cx = -settings.groundSize / 2 + (i + 0.5) * size;
+      const cz = -settings.groundSize / 2 + (j + 0.5) * size;
+      mesh.bakeTransformIntoVertices(BABYLON.Matrix.Translation(cx, 0, cz));
+      const positions = mesh.getVerticesData(BABYLON.VertexBuffer.PositionKind);
+      const colors = [];
+      const uvs = [];
+      for (let k = 0; k < positions.length; k += 3) {
+        colors.push(...tone(positions[k], positions[k + 2]));
+        uvs.push(positions[k] / settings.groundTileSize, positions[k + 2] / settings.groundTileSize);
+      }
+      mesh.setVerticesData(BABYLON.VertexBuffer.ColorKind, colors);
+      mesh.setVerticesData(BABYLON.VertexBuffer.UVKind, uvs);
+      meshes.push(mesh);
+    }
+  }
+  return meshes;
 }
 
 /** Faixa de terra com bordas irregulares, acompanhando a curva da trilha. */
@@ -280,7 +308,9 @@ function createTrail(BABYLON, scene, path, index, settings, tone) {
 /** Esfera com degradê: cor da neblina no horizonte, escura no alto. */
 function createSkyDome(BABYLON, scene, settings) {
   const { sky, fog } = settings;
-  const mesh = BABYLON.MeshBuilder.CreateSphere('sky', { diameter: sky.radius * 2, segments: 24 }, scene);
+  // Só a parte de cima (e uma faixa abaixo do horizonte): o resto fica sempre
+  // atrás do chão e só custaria pixels.
+  const mesh = BABYLON.MeshBuilder.CreateSphere('sky', { diameter: sky.radius * 2, segments: 24, slice: sky.slice }, scene);
   const horizon = BABYLON.Color3.FromHexString(fog.color);
   const zenith = BABYLON.Color3.FromHexString(sky.zenithColor);
   const positions = mesh.getVerticesData(BABYLON.VertexBuffer.PositionKind);

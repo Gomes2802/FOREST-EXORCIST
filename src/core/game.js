@@ -42,6 +42,14 @@ export class Game {
     this.messageTime = 0;
     /** Chamado a cada atualização com o estado da interface (ver ui/hud.js). */
     this.onHud = () => {};
+    /** Qualidade escolhida ('auto' ou um nível) e nível em uso. */
+    this.quality = config.graphics.quality;
+    this.level = this.quality === 'auto' ? config.graphics.auto.start : this.quality;
+    /** Chamado quando o nível muda, com { quality, level, renderScale }. */
+    this.onQualityChange = () => {};
+    /** Aviso temporário ao jogador: { text, time }. */
+    this.notice = null;
+    this.autoSamples = { warm: 0, time: 0, frames: 0 };
     this.input = input ?? new InputController({ element: canvas });
     this.mode = 'menu';
     /** Chamado a cada mudança de modo com { mode, control, notice }. */
@@ -58,6 +66,7 @@ export class Game {
     try {
       const { BABYLON, config } = this;
       this.engine = this.createEngine();
+      this.pixelRenderer.configure({ renderScale: this.detail.renderScale });
       this.pixelRenderer.applyToEngine(this.engine);
 
       this.scene = new BABYLON.Scene(this.engine);
@@ -112,6 +121,7 @@ export class Game {
       this.player.update(delta, this.input.getIntent(), this.view.yaw);
       this.view.update(delta, this.player);
       this.#updateExorcism(delta);
+      this.#updateAutoQuality(delta);
     } else if (this.mode === 'menu') {
       this.view.updateIdle(delta, this.player.position);
     }
@@ -165,8 +175,65 @@ export class Game {
     this.exorcism.reset();
     this.target = null;
     this.messageTime = 0;
+    this.notice = null;
     this.#followPlayer();
     this.onHud(this.#hudState());
+  }
+
+  /** Nível de qualidade em uso (CONFIG.graphics.presets). */
+  get detail() {
+    return this.config.graphics.presets[this.level];
+  }
+
+  /**
+   * Escolhe a qualidade gráfica: 'auto' ou um dos níveis. Muda a resolução e as
+   * distâncias de desenho na hora, sem recriar a floresta.
+   * @returns {boolean} false se o nome for desconhecido
+   */
+  setQuality(quality) {
+    const { graphics } = this.config;
+    if (quality !== 'auto' && !Object.hasOwn(graphics.presets, quality)) return false;
+    this.quality = quality;
+    this.autoSamples = { warm: 0, time: 0, frames: 0 };
+    this.#applyLevel(quality === 'auto' ? graphics.auto.start : quality);
+    return true;
+  }
+
+  #applyLevel(level) {
+    this.level = level;
+    const { renderScale } = this.detail;
+    if (this.engine) this.setRenderScale(renderScale);
+    this.forest?.setDetail(this.detail);
+    if (this.view) this.#followPlayer();
+    this.onQualityChange({ quality: this.quality, level, renderScale });
+  }
+
+  /** Modo automático: desce um nível se o jogo ficar lento, e avisa o jogador. */
+  #updateAutoQuality(delta) {
+    if (this.notice) {
+      this.notice.time -= delta;
+      if (this.notice.time <= 0) this.notice = null;
+    }
+    const { auto, levels, labels } = this.config.graphics;
+    if (this.quality !== 'auto') return;
+    const samples = this.autoSamples;
+    samples.warm += delta;
+    if (samples.warm < auto.warmup) return;
+    samples.time += delta;
+    samples.frames += 1;
+    if (samples.time < auto.window) return;
+    const fps = samples.frames / samples.time;
+    samples.time = 0;
+    samples.frames = 0;
+    const index = levels.indexOf(this.level);
+    if (fps >= auto.minFps || index <= 0) return;
+    const next = levels[index - 1];
+    this.#applyLevel(next);
+    samples.warm = 0;
+    this.notice = {
+      text: `Qualidade gráfica reduzida para ${labels[next]} (${Math.round(fps)} FPS). Ajuste em Configurações.`,
+      time: auto.noticeDuration,
+    };
   }
 
   #capture() {
@@ -198,6 +265,8 @@ export class Game {
 
   #enterPlaying(control) {
     this.input.enable(control);
+    // Os primeiros quadros depois de entrar ou voltar não contam para o automático.
+    this.autoSamples.warm = 0;
     this.#setMode('playing', { control });
   }
 
@@ -254,6 +323,7 @@ export class Game {
       aim,
       progress: showProgress ? entity.progress : null,
       message: this.messageTime > 0 ? config.exorcism.message : null,
+      notice: this.notice?.text ?? null,
     };
   }
 
@@ -261,7 +331,7 @@ export class Game {
   #followPlayer() {
     const { camera } = this.view;
     this.lights.flashlight.follow(camera);
-    this.forest?.follow(camera.position);
+    this.forest?.follow(camera.position, camera.rotation);
   }
 
   resize() {
@@ -284,8 +354,11 @@ export class Game {
     const task = this.rebuildQueue.then(async () => {
       this.pixelRenderer.configure({ resolutionScale: value });
       this.spriteManager.repixelate();
-      this.forest.dispose();
+      // A nova floresta fica pronta antes de a antiga sair: nenhum quadro é
+      // desenhado (nem atualizado) com uma floresta já descartada.
+      const previous = this.forest;
       this.forest = await this.#buildForest();
+      previous.dispose();
       this.entity.refresh();
       this.cross.refresh();
       this.#followPlayer();
@@ -310,6 +383,7 @@ export class Game {
       spriteManager: this.spriteManager,
       pixelRenderer: this.pixelRenderer,
       lights: this.lights,
+      detail: this.detail,
     });
   }
 

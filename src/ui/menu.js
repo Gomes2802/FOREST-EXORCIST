@@ -126,7 +126,8 @@ export class Menu {
 
   async #changeSetting(input) {
     try {
-      await this.callbacks.onSetting(input.dataset.setting, Number(input.value));
+      const value = input.dataset.type === 'text' ? input.value : Number(input.value);
+      await this.callbacks.onSetting(input.dataset.setting, value);
     } catch (error) {
       console.error('[menu] falha ao aplicar configuração', error);
     }

@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.4.1 — 2026-11-26
+
+Manutenção: repositório Git e desempenho sem placa de vídeo. Sem mudanças na
+jogabilidade.
+
+### Adicionado
+
+- Repositório Git local (branch `main`, tag `v0.4.0` como base) e `.gitignore`.
+- Qualidade gráfica (Alta, Média, Baixa, Muito baixa e Automática) em
+  Configurações e em `graphics` (`config.js`), também por
+  `./start.sh --qualidade` ou `?qualidade=`.
+- Modo automático: desce um nível se o jogo ficar abaixo de 28 FPS e avisa.
+- Resoluções 512x288 e 426x240 (16:9).
+- `tools/benchmark.mjs` (`npm run benchmark`): medição reproduzível no Chrome.
+
+### Alterado
+
+- Sprites da floresta em uma malha por material, com atlas de texturas e
+  orientação para a câmera calculada no JavaScript (antes, instâncias).
+- Grama e sombras em malhas por região, com descarte fora da vista e grama mais
+  rala ao longe (antes, instâncias finas).
+- Chão em 3x3 regiões; luz ambiente e luar do chão e das trilhas calculados uma
+  vez (mesmo resultado); céu desenhado só acima do horizonte.
+- Software com janela, qualidade Média: 40 → 50 FPS na floresta; Muito baixa: 68.
+- Chamadas de desenho: 24 → 32 na Média, 23 na Muito baixa.
+
+### Corrigido
+
+- Trocar a resolução dos sprites podia desenhar um quadro com a floresta antiga já
+  descartada (erro no console). A nova é montada antes de a antiga sair.
+
 ## 0.4.0 — 2026-11-26
 
 Etapa 4: cruz e sistema de exorcismo.

@@ -245,7 +245,10 @@ describe('Exorcismo no Chrome', { skip }, () => {
         size: [game.engine.getRenderWidth(), game.engine.getRenderHeight()] };
     })()`);
     await release();
-    assert.ok(result.draws <= 30, `${result.draws} chamadas de desenho`);
+    // v0.4.1: a vegetação passou de instâncias para malhas por região. São mais
+    // chamadas de desenho (eram 24), mas cada instância custava quase uma chamada
+    // no Chrome sem placa de vídeo, e o tempo total de desenho caiu (ver README).
+    assert.ok(result.draws <= 40, `${result.draws} chamadas de desenho`);
     assert.equal(result.lights, 3);
     assert.deepEqual(result.size, [640, 360]);
     // Limite frouxo: o Chrome sem janela desenha por software.

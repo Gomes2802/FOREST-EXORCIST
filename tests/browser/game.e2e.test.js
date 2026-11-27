@@ -153,7 +153,7 @@ describe('Forest Exorcist no Chrome', { skip }, () => {
     const corner = await project(-1.95, 1.4, 5);
     const [withSprite] = await colorsAt('', [corner]);
     const [without] = await colorsAt(
-      'game.forest.objects.filter(o => o.name.startsWith("cross#")).forEach(o => o.setEnabled(false));',
+      'game.forest.billboards.filter(b => b.sprites.some(s => s.sprite === "cross")).forEach(b => b.mesh.setEnabled(false));',
       [corner],
     );
     assert.deepEqual(withSprite, without);
@@ -163,19 +163,24 @@ describe('Forest Exorcist no Chrome', { skip }, () => {
     await load();
     const textures = await page.evaluate(`(() => {
       const { game } = window.forestExorcist;
-      const meshes = [...game.forest.bases].concat(game.forest.grass.map((m) => [m.name, m]));
-      return meshes.map(([id, base]) => {
-        const texture = base.material.diffuseTexture;
-        return { id, ready: texture.isReady(), sampling: texture.samplingMode,
-          size: [texture.getSize().width, texture.getSize().height] };
+      // Todos os sprites da floresta passam pelos atlas (um por material).
+      return game.forest.atlases.map((atlas) => {
+        const texture = atlas.material.diffuseTexture;
+        const rects = Object.fromEntries([...atlas.rects].map(([id, r]) => [id, [r.width, r.height]]));
+        return { id: atlas.key, ready: texture.isReady(), sampling: texture.samplingMode,
+          size: [texture.getSize().width, texture.getSize().height], rects };
       });
     })()`);
-    assert.equal(textures.length, 14);
+    const sprites = textures.flatMap((t) => Object.keys(t.rects));
+    assert.equal(sprites.length, 14, sprites.join());
     for (const texture of textures) {
       assert.equal(texture.ready, true, texture.id);
       assert.equal(texture.sampling, 1, texture.id);
     }
-    assert.deepEqual(textures.find((t) => t.id === 'tree_01').size, [48, 88]);
+    // Cada sprite mantém a resolução definida pelo pixelRenderer.
+    const scenery = textures.find((t) => t.rects.tree_01);
+    assert.deepEqual(scenery.rects.tree_01, [48, 88]);
+    assert.ok(scenery.size[0] >= 48 && scenery.size[1] >= 88);
   });
 
   test('o canvas do navegador reduz imagens sem misturar cores e preserva a transparência', async () => {
@@ -224,7 +229,7 @@ describe('Forest Exorcist no Chrome', { skip }, () => {
     await change('renderScale', 4);
     await change('fogDensity', 0.085);
     await change('resolutionScale', 0.5);
-    await page.waitFor('window.forestExorcist.game.forest.bases.get("tree_01").material.diffuseTexture.getSize().height === 44');
+    await page.waitFor('window.forestExorcist.game.forest.atlases.find((a) => a.ids.has("tree_01")).rects.get("tree_01").height === 44');
     assert.equal((await sampleScene()).width, 320);
     assert.equal(await page.evaluate('window.forestExorcist.game.scene.fogDensity'), 0.085);
     await page.key('Escape', 27);
@@ -235,6 +240,41 @@ describe('Forest Exorcist no Chrome', { skip }, () => {
     await shot('04-sair');
     await page.click('[data-screen="quit"] [data-action="back"]');
     assert.deepEqual(await visible(), ['main']);
+    assert.deepEqual(page.log.errors, []);
+  });
+
+  test('qualidade gráfica: pelo menu e pelo endereço, com a resolução em 16:9', async () => {
+    await load();
+    const read = () => page.evaluate(`(() => {
+      const { game } = window.forestExorcist;
+      return { quality: game.quality, level: game.level, size: [game.engine.getRenderWidth(), game.engine.getRenderHeight()],
+        menuQuality: document.querySelector('[data-setting="quality"]').value,
+        menuScale: document.querySelector('[data-setting="renderScale"]').value,
+        sprites: game.forest.billboards.reduce((n, b) => n + b.visibleCount, 0) };
+    })()`);
+    const initial = await read();
+    assert.deepEqual([initial.quality, initial.level, initial.size, initial.menuQuality], ['auto', 'medio', [640, 360], 'auto']);
+    await page.click('[data-screen="main"] [data-action="settings"]');
+    const change = (name, value) => page.evaluate(`(() => {
+      const select = document.querySelector('[data-setting="${name}"]');
+      select.value = '${value}';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    })()`);
+    for (const [quality, size, scale] of [['muito-baixo', [426, 240], '3'], ['baixo', [512, 288], '2.5'], ['alto', [640, 360], '2']]) {
+      await change('quality', quality);
+      const now = await read();
+      assert.deepEqual([now.level, now.size, now.menuScale], [quality, size, scale]);
+      assert.equal((await sampleScene()).magenta, 0);
+    }
+    await change('renderScale', 3);
+    assert.deepEqual((await read()).size, [426, 240], 'a resolução pode ser trocada à parte');
+    await page.key('Escape', 27);
+
+    await page.open(`${server.url}?qualidade=muito-baixo`);
+    await page.waitFor(READY);
+    const shortcut = await read();
+    assert.deepEqual([shortcut.quality, shortcut.size, shortcut.menuQuality], ['muito-baixo', [426, 240], 'muito-baixo']);
+    assert.ok(shortcut.sprites < initial.sprites, 'menos sprites desenhados');
     assert.deepEqual(page.log.errors, []);
   });
 

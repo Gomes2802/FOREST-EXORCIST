@@ -4,7 +4,7 @@
  * assets/sprites/manifest.json (dados, sem código).
  */
 export const CONFIG = deepFreeze({
-  version: '0.4.0',
+  version: '0.4.1',
 
   display: {
     /** Resolução de referência. O canvas se adapta à janela. */
@@ -25,6 +25,48 @@ export const CONFIG = deepFreeze({
     alphaCutoff: 0,
     /** 0 = preserva as cores; 2..64 = níveis por canal (posterização). */
     colorLevels: 0,
+  },
+
+  /**
+   * Qualidade gráfica. Só muda o que é desenhado e a resolução: alcance da cruz,
+   * colisões, velocidade e controles são os mesmos em todos os níveis.
+   */
+  graphics: {
+    /** 'auto' | 'muito-baixo' | 'baixo' | 'medio' | 'alto' */
+    quality: 'auto',
+    /** Ordem do mais leve ao mais pesado (o automático só desce nesta lista). */
+    levels: ['muito-baixo', 'baixo', 'medio', 'alto'],
+    labels: { auto: 'Automática', 'muito-baixo': 'Muito baixa', baixo: 'Baixa', medio: 'Média', alto: 'Alta' },
+    /**
+     * renderScale: divisor da resolução (2 = 640x360, 2.5 = 512x288, 3 = 426x240).
+     * Distâncias de desenho por categoria (a neblina também limita):
+     * spriteDistance árvores e pedras; smallDistance sprites baixos (arbustos,
+     * plantas); grassDistance grama, cheia até grassNear e com grassFarDensity
+     * (fração) no limite; shadowDistance sombras no chão.
+     */
+    presets: {
+      'muito-baixo': {
+        renderScale: 3, spriteDistance: 27, smallDistance: 14, grassDistance: 10,
+        grassNear: 5, grassFarDensity: 0.35, shadowDistance: 12,
+      },
+      baixo: {
+        renderScale: 2.5, spriteDistance: 31, smallDistance: 19, grassDistance: 13,
+        grassNear: 7, grassFarDensity: 0.45, shadowDistance: 18,
+      },
+      medio: {
+        renderScale: 2, spriteDistance: 55, smallDistance: 26, grassDistance: 18,
+        grassNear: 10, grassFarDensity: 0.6, shadowDistance: 28,
+      },
+      alto: {
+        renderScale: 2, spriteDistance: 55, smallDistance: 34, grassDistance: 24,
+        grassNear: 16, grassFarDensity: 0.8, shadowDistance: 36,
+      },
+    },
+    /**
+     * Automática: começa em `start` e, se a média ficar abaixo de minFps por
+     * `window` segundos de jogo, desce um nível e avisa o jogador. Nunca sobe.
+     */
+    auto: { start: 'medio', minFps: 28, window: 4, warmup: 2, noticeDuration: 6 },
   },
 
   assets: {
@@ -65,6 +107,8 @@ export const CONFIG = deepFreeze({
       /** Altura (0..1) até onde vale a cor da neblina e extensão do degradê. */
       horizon: 0.06,
       fade: 0.45,
+      /** Fração da esfera desenhada, a partir do topo (o resto fica atrás do chão). */
+      slice: 0.56,
     },
     moon: { color: '#d8e0f0', radius: 2.4, offset: [-17, 24, 60] },
     /** Silhuetas no horizonte; a cor mais distante é mais próxima da neblina. */
@@ -83,8 +127,10 @@ export const CONFIG = deepFreeze({
      */
     culling: {
       fogReach: 2, minDistance: 24, maxDistance: 55, step: 1.5,
-      /** Limites menores para o que é pequeno: some na neblina bem antes. */
-      smallHeight: 1.5, smallDistance: 26, grassDistance: 18,
+      /** Sprites mais baixos que isto usam smallDistance (ver graphics.presets). */
+      smallHeight: 1.5,
+      /** Tamanho das regiões de grama e de sombras, em unidades. */
+      grassChunk: 12, shadowChunk: 20,
     },
   },
 
@@ -189,6 +235,8 @@ export const CONFIG = deepFreeze({
     seed: 1337,
     groundSize: 180,
     groundSubdivisions: 90,
+    /** O chão é dividido em groundTiles x groundTiles regiões. */
+    groundTiles: 3,
     groundTileSize: 4,
     pathTileSize: 2,
     /** Trilhas de terra: pontos [x, z] ligados por uma curva suave. */

@@ -3,8 +3,9 @@
 Terror sobrenatural em primeira pessoa, em uma floresta à noite, com pixel art
 em um ambiente 3D.
 
-**Estado atual: Etapa 4 (cruz e exorcismo).** É possível explorar a floresta à
-noite e expulsar uma entidade de teste com a cruz. Ela ainda não se move, não
+**Estado atual: Etapa 4 (cruz e exorcismo), com otimizações para computadores sem
+placa de vídeo (0.4.1).** É possível explorar a floresta à noite e expulsar uma
+entidade de teste com a cruz. Ela ainda não se move, não
 persegue nem ataca, e não há combate.
 
 ## Como jogar (sem internet)
@@ -49,6 +50,7 @@ janela perde o foco.
 | O arquivo perdeu a permissão de execução (pendrive, ZIP) | `sh start.sh` ou `python3 serve.py` |
 | Escolher a porta (padrão 8000; se ocupada, tenta as seguintes) | `./start.sh --port 9000` |
 | Não abrir o navegador | `./start.sh --no-browser` |
+| Abrir já com uma qualidade gráfica (computador sem placa de vídeo) | `./start.sh --qualidade muito-baixo` |
 
 O servidor escuta somente em `127.0.0.1`: outros computadores não o acessam.
 
@@ -215,12 +217,74 @@ Os valores ficam em `src/config.js`:
 | Lanterna ligada ao começar | `lighting.lantern.startOn` | `true` |
 | Neblina: cor e densidade | `environment.fog` | `#16223a` / 0,055 |
 | Horizonte | `environment.sky`, `moon`, `backdrop` | — |
-| Distância de desenho | `environment.culling` | até 36 (neblina normal) |
+| Distância de desenho | `graphics.presets`, `environment.culling` | ver abaixo |
 
 - As trilhas ficam sempre livres de obstáculos.
 - A neblina é exponencial: quase invisível perto e total ao longe. O que ela
-  esconde deixa de ser desenhado (a grama, a partir de 18 unidades).
+  esconde deixa de ser desenhado.
 - São três luzes, sem sombras dinâmicas. As "sombras" no chão são manchas fixas.
+- No chão e nas trilhas, que são planos, a luz ambiente e o luar entram como uma
+  cor fixa com o mesmo resultado; só a lanterna é calculada a cada pixel.
+
+## Qualidade gráfica e desempenho
+
+Em **Configurações → Qualidade gráfica**:
+
+| Nível | Resolução | Árvores e pedras | Arbustos e plantas | Grama (cheia até) | Sombras |
+| --- | --- | --- | --- | --- | --- |
+| Alta | 640x360 | até a neblina | 34 | 24 (16) | 36 |
+| Média | 640x360 | até a neblina | 26 | 18 (10) | 28 |
+| Baixa | 512x288 | 31 | 19 | 13 (7) | 18 |
+| Muito baixa | 426x240 | 27 | 14 | 10 (5) | 12 |
+| Automática (padrão) | começa na Média | | | | |
+
+- Na **Automática**, se o jogo ficar abaixo de 28 FPS por 4 segundos, ele desce um
+  nível e mostra um aviso no canto da tela (inclusive quando a resolução muda).
+  Nunca sobe sozinho e não mede no menu nem na pausa.
+- A qualidade só muda o que é desenhado e a resolução. Colisões, alcance da cruz,
+  velocidade e controles são iguais em todos os níveis.
+- A qualidade escolhe a resolução, que depois pode ser trocada em **Resolução da
+  imagem**. Todas mantêm 16:9 e a ampliação sem suavização.
+- Os níveis ficam em `graphics` (`src/config.js`). As escolhas valem até a página
+  ser fechada; para fixar uma, use `./start.sh --qualidade <nível>` ou o endereço
+  `?qualidade=<nível>`.
+
+### Medições (v0.4.1, 26/11/2026)
+
+Medidas com `node tools/benchmark.mjs --seconds 10 --quality <nível>` (Chrome
+158, Windows 10, 1280x720). A floresta é medida no ponto inicial, com a câmera
+girando 360°; o exorcismo, diante da entidade com a cruz erguida. FPS médio e,
+entre parênteses, o 1% low.
+
+| Chrome | Cena | 0.4.0 | Média | Baixa | Muito baixa |
+| --- | --- | --- | --- | --- | --- |
+| Software, janela | floresta | 40,4 (30,7) | 50,2 (33,2) | 61,0 (41,5) | 68,4 (47,1) |
+| Software, janela | exorcismo | 37,2 (31,4) | 48,7 (31,6) | 58,6 (46,3) | 64,1 (41,4) |
+| Software, sem janela | floresta | 25,5 (20,6) | 29,7 (22,9) | 33,2 (26,2) | 35,0 (25,8) |
+| Software, sem janela | exorcismo | 24,9 (21,3) | 29,4 (24,1) | 32,5 (26,8) | 34,4 (22,4) |
+| RTX 2060, janela | floresta | 180 (139) | 180 (167) | 180 (168) | 180 (163) |
+
+"Software" é o WebGL do SwiftShader, que o Chrome usa quando não há placa de vídeo
+utilizável. Sem janela (`--headless`), o próprio Chrome limita até a cena vazia a
+~41 FPS; com janela, a cena vazia chega a ~104 FPS. As medições foram feitas em
+um processador rápido: em computadores mais lentos o modo software rende menos.
+
+O que pesava (medido isoladamente, v0.4.0): no SwiftShader cada instância custa
+quase o mesmo que uma chamada de desenho. A grama (535 tufos) custava ~5 ms por
+quadro; os sprites (~500), ~4,5 ms; as sombras, ~2,7 ms; o chão, ~4,3 ms; o
+céu, ~1,5 ms. O JavaScript, ~3 ms. Por isso a vegetação deixou de usar
+instâncias (`src/graphics/batches.js`):
+
+- Sprites: todos os de um material em uma malha, com as imagens em um atlas. O
+  JavaScript os vira para a câmera e descarta os que estão longe ou fora da vista.
+- Grama e sombras: malhas por região, descartadas fora da vista; a grama fica
+  mais rala ao longe (só um trecho dos índices é desenhado).
+- Chão em 3x3 regiões; céu só acima do horizonte.
+
+Resultado na média: o tempo de desenho por quadro caiu de 16,8 para ~10 ms, e o
+JavaScript de 3 para 1,7 ms. Malhas: 1.399 → 460; materiais: 26 → 14. As chamadas
+de desenho subiram de 24 para 23–32 (regiões em vez de instâncias), o que custa
+pouco no software.
 
 ## Pixelização
 
@@ -242,8 +306,12 @@ Para imagens de interface, use `<img data-pixelate data-pixel-height="32">` ou
 `pixelRenderer.pixelateElement(img, { pixelHeight: 32 })`. Sem altura definida,
 a resolução original é mantida.
 
-O menu **Configurações** ajusta a pixelização da imagem, a resolução dos sprites
-e a neblina. Os valores não são salvos.
+O menu **Configurações** ajusta a qualidade gráfica, a resolução da imagem, a
+resolução dos sprites e a neblina. Os valores não são salvos.
+
+Os sprites da floresta são reunidos em um atlas (uma textura por material) na
+hora em que o jogo carrega, a partir das imagens já pixeladas. Substituir um PNG
+continua funcionando do mesmo jeito.
 
 ## Estrutura
 
@@ -263,10 +331,11 @@ src/
   player/                 player.js (movimento e colisões), cross.js (cruz)
   entities/entity.js      estados e aparência da entidade
   systems/                interaction.js (mira por raycast), exorcism.js (regras)
-  graphics/               pixelRenderer.js, spriteManager.js, materials.js
+  graphics/               pixelRenderer.js, spriteManager.js, materials.js,
+                          batches.js (atlas e geometria agrupada)
   ui/                     menu.js (menu e pausa), hud.js (mira, barra, mensagem)
 assets/                   sprites/, textures/, sounds/, models/
-tools/                    build, cópia da biblioteca, geração dos provisórios
+tools/                    build, cópia da biblioteca, provisórios, benchmark.mjs
 tests/                    unit/, browser/, real/, helpers/
 ```
 
@@ -283,6 +352,7 @@ Requer Node.js 22 ou mais novo. Build e testes não precisam de `node_modules`.
 | `npm run test:real` | Captura do mouse e `Esc` reais; abre uma janela por alguns segundos (requer Xephyr e `python3-xlib`) |
 | `npm run placeholders` | Recria provisórios **ausentes** (`-- --force` sobrescreve todos) |
 | `npm run vendor` | Atualiza `lib/` após `npm install` (único passo que usa internet) |
+| `npm run benchmark` | Mede o desempenho no Chrome (ver `tools/benchmark.mjs`); aceita `-- --quality muito-baixo` |
 
 Opções dos testes de navegador: `FE_GPU=1` (usa a placa de vídeo em vez de WebGL
 por software), `FE_VISIBLE=1` (abre uma janela), `FE_SCREENSHOTS=pasta` (salva
@@ -293,6 +363,17 @@ tamanho ou a cor originais; isso não indica defeito no jogo.
 
 Para levar a outro computador, copie a pasta `dist/` e execute `start.sh` nela.
 
+### Repositório Git
+
+O projeto é um repositório Git local (branch `main`, tags `v0.4.0` e `v0.4.1`).
+Ficam fora dele `node_modules/` (só serve para `npm run vendor`), resultados de
+medições e testes, temporários e arquivos de ambiente (`.gitignore`).
+
+`dist/` também fica fora: é gerada por `npm run build` a partir dos arquivos
+versionados e seria uma segunda cópia de tudo (inclusive dos 9 MB do Babylon.js).
+Para distribuir uma versão, faça `git checkout v0.4.1`, `npm run build` e copie
+`dist/`. A biblioteca `lib/` é versionada, pois o jogo roda sem internet.
+
 ## Limitações conhecidas
 
 - Há uma única entidade, parada; depois de expulsa, só volta ao retornar ao menu.
@@ -302,14 +383,19 @@ Para levar a outro computador, copie a pasta `dist/` e execute `start.sh` nela.
   arbustos não escondem a entidade.
 - Sem efeitos sonoros.
 - É necessário o servidor local; `file://` não funciona.
-- Sprites são planos que giram para a câmera; vistos de perto, não têm volume.
+- Sprites são planos voltados para a câmera (todos paralelos à tela, como em jogos
+  clássicos); vistos de perto, não têm volume.
 - Sem sombras dinâmicas: a lanterna atravessa árvores e pedras.
 - Sprites são iluminados como planos de frente para a câmera, sem volume.
 - Não há pulo, agachamento, gravidade nem relevo: o terreno é plano.
 - A borda da área explorável é invisível; as trilhas continuam na neblina além
   dela.
-- Sem placa de vídeo (WebGL por software) a taxa fica abaixo de 30 FPS; use
-  Configurações → Pixelização "Muito forte" e neblina "Densa".
+- Sem placa de vídeo, a média fica acima de 30 FPS na qualidade Muito baixa, mas
+  o 1% low fica entre 22 e 26 FPS no Chrome sem janela (ver Medições). Em
+  computadores mais lentos que o usado nas medições, pode ser preciso também a
+  neblina "Densa" ou a resolução 320x180.
+- Nas qualidades Baixa e Muito baixa, árvores distantes surgem um pouco antes da
+  neblina as esconder totalmente.
 - Com a neblina "Leve", objetos distantes podem aparecer de repente.
 - Somente teclado e mouse; as teclas não podem ser reconfiguradas no menu.
 - A sensibilidade do mouse só é ajustada em `src/config.js`.

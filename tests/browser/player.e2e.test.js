@@ -326,7 +326,8 @@ describe('Exploração no Chrome', { skip }, () => {
         frames += 1;
       }
       return { fps: frames / ((performance.now() - start) / 1000), travelled: game.player.travelled,
-        enabled: game.forest.objects.filter((o) => o.isEnabled()).length, total: game.forest.objects.length,
+        enabled: game.forest.billboards.reduce((n, b) => n + b.visibleCount, 0),
+        total: game.forest.billboards.reduce((n, b) => n + b.sprites.length, 0),
         glError: game.engine._gl.getError() };
     })()`);
     await page.keyUp('KeyW');
@@ -355,7 +356,10 @@ describe('Exploração no Chrome', { skip }, () => {
       return { most, size: [game.engine.getRenderWidth(), game.engine.getRenderHeight()] };
     })()`);
     await page.keyUp('KeyW');
-    assert.ok(result.most > 0 && result.most <= 30, `${result.most} chamadas de desenho`);
+    // v0.4.1: a vegetação passou de instâncias para malhas por região. São mais
+    // chamadas de desenho (eram 24), mas cada instância custava quase uma chamada
+    // no Chrome sem placa de vídeo, e o tempo total de desenho caiu (ver README).
+    assert.ok(result.most > 0 && result.most <= 40, `${result.most} chamadas de desenho`);
     assert.deepEqual(result.size, [640, 360]);
     noProblems();
   });

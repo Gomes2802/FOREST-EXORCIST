@@ -44,12 +44,22 @@
     <section class="screen screen--menu" data-screen="settings" aria-label="Configurações" hidden>
       <h2>CONFIGURAÇÕES</h2>
       <div class="panel">
-        <label>Pixelização da imagem
+        <label>Qualidade gráfica
+          <select data-setting="quality" data-type="text">
+            <option value="auto">Automática</option>
+            <option value="alto">Alta</option>
+            <option value="medio">Média</option>
+            <option value="baixo">Baixa (mais leve)</option>
+            <option value="muito-baixo">Muito baixa (sem placa de vídeo)</option>
+          </select>
+        </label>
+        <label>Resolução da imagem
           <select data-setting="renderScale">
-            <option value="1">Desligada (mais pesado)</option>
-            <option value="2">Média</option>
-            <option value="3">Forte</option>
-            <option value="4">Muito forte (mais leve)</option>
+            <option value="1">1280x720 (mais pesado)</option>
+            <option value="2">640x360 (padrão)</option>
+            <option value="2.5">512x288 (econômica)</option>
+            <option value="3">426x240 (emergência)</option>
+            <option value="4">320x180 (mínima)</option>
           </select>
         </label>
         <label>Resolução dos sprites
@@ -68,7 +78,9 @@
             <option value="0.085">Densa</option>
           </select>
         </label>
-        <p class="hint">200% só tem efeito em imagens maiores que o tamanho padrão no jogo.<br>
+        <p class="hint">A qualidade também escolhe a resolução; depois é possível trocá-la.
+          Na Automática, o jogo baixa a qualidade sozinho se ficar lento e avisa.<br>
+          200% só tem efeito em imagens maiores que o tamanho padrão no jogo.<br>
           Os ajustes valem até a página ser fechada.</p>
       </div>
       <div class="buttons">
@@ -97,6 +109,7 @@
       </div>
       <p id="cross-indicator" hidden>&#10013; CRUZ ERGUIDA</p>
       <p id="hud-message" role="status" hidden></p>
+      <p id="hud-notice" role="status" hidden></p>
       <div id="drag-help" hidden>
         <p class="hud-hint">Mouse não capturado: segure o botão esquerdo e arraste para olhar.
           <kbd>F</kbd> lanterna, <kbd>Esc</kbd> pausa.</p>

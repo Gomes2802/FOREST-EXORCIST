@@ -34,6 +34,19 @@ export function createLighting(BABYLON, scene, settings) {
     excludeFromNight(mesh) {
       for (const light of [ambient, moon]) light.excludedMeshes.push(mesh);
     },
+    /** Cor que a luz ambiente e o luar dão a uma superfície voltada para cima. */
+    nightColor() {
+      const up = Math.max(0, -moon.direction.normalizeToNew().y);
+      return ambient.diffuse.scale(ambient.intensity).add(moon.diffuse.scale(moon.intensity * up));
+    },
+    /**
+     * Superfície plana (chão, trilhas): troca as duas luzes da noite por uma cor
+     * fixa com o mesmo resultado. O shader passa a calcular só a lanterna.
+     */
+    bakeNight(mesh) {
+      this.excludeFromNight(mesh);
+      mesh.material.emissiveColor = this.nightColor();
+    },
   };
 }
 
