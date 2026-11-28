@@ -35,7 +35,8 @@ test('os PNGs provisórios são RGBA (com transparência) e pequenos', async () 
     const png = readPngSize(projectPath(`assets/sprites/${file}`));
     assert.equal(png.colorType, 6, file);
     // Arte enviada pelo jogador pode ser maior que a provisória; o jogo a reduz ao pixelizar.
-    assert.ok(Math.max(png.width, png.height) <= 1024, file);
+    // A folha de animação da cruz tem cinco quadros lado a lado.
+    assert.ok(Math.max(png.width, png.height) <= (file.includes('using_') ? 2560 : 1024), file);
   }
 });
 

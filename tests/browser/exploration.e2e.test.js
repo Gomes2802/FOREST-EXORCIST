@@ -122,6 +122,7 @@ describe('Cabana e entidades no Chrome', { skip }, () => {
       await look(0.5, 5, 1.3, 11, 1.6);
       assert.equal(await page.evaluate('document.getElementById("crosshair").dataset.aim'), 'target', id);
       await shot(`43-${id}`);
+      await page.evaluate('(() => { const { game } = window.forestExorcist; if (!game.inventory.selected) game.selectSlot(1); })()');
       await page.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: 640, y: 360, button: 'left', buttons: 1, clickCount: 1 });
       await page.waitFor(`window.forestExorcist.game.entities.get('${id}').entity.state === "exorcised"`, 15000);
       await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: 640, y: 360, button: 'left', buttons: 0, clickCount: 1 });

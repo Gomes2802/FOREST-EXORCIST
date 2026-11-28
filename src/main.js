@@ -58,7 +58,7 @@ async function boot() {
   game.onModeChange = (state) => menu.showGameState(state);
   // A qualidade também muda a resolução: o menu acompanha.
   game.onQualityChange = ({ quality, renderScale }) => menu.setValues({ quality, renderScale });
-  const hud = new Hud(document, { flash: CONFIG.exorcism.flash });
+  const hud = new Hud(document, { flash: CONFIG.exorcism.flash, items: CONFIG.items });
   game.onHud = (state) => hud.render(state);
   const notebook = new Notebook(document, {
     investigation: game.investigation,

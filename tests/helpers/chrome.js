@@ -19,7 +19,7 @@ const CANDIDATES = [
   'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',
 ];
 
-const KEY_CODES = { KeyW: 87, KeyA: 65, KeyS: 83, KeyD: 68, KeyF: 70, ShiftLeft: 16 };
+const KEY_CODES = { KeyW: 87, KeyA: 65, KeyS: 83, KeyD: 68, KeyF: 70, ShiftLeft: 16, KeyG: 71, Digit1: 49 };
 
 export const findChrome = () => CANDIDATES.find((path) => path && existsSync(path));
 

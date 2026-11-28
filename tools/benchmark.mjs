@@ -12,6 +12,7 @@
  *   vazia      só o céu: todas as malhas desligadas (custo fixo do navegador e do motor)
  *   floresta   jogando, no ponto inicial
  *   exorcismo  diante da entidade, com a cruz erguida e o exorcismo em andamento
+ *   equipada   no ponto inicial, com a cruz na mão e em repouso
  *   cabana     dentro da cabana, com a porta aberta, olhando em volta
  *   entidades  as entidades presentes ao mesmo tempo, com a cruz erguida
  *   vegetacao  parado, olhando para o trecho com mais sprites à vista
@@ -65,12 +66,17 @@ const SETUP = {
     game.entities.reset();
     [[-3, 12], [3.5, 15], [0.3, 9]].forEach(([x, z], i) => game.entities.members[i].haunting.summon(x, z, { pinned: true }));
     window.__holding = true;
+    game.selectSlot?.(1);
     game.input.isPrimaryHeld = true;`,
   exorcismo: `game.player.teleport(0.5, 6);
     // A entidade fica presente e parada no mesmo lugar em todas as versões.
     game.haunting?.summon(1.3, 11, { pinned: true });
     window.__holding = true;
+    game.selectSlot?.(1);
     game.input.isPrimaryHeld = true;`,
+  // A cruz na mão, em repouso (antes de existir a seleção, a mão fica vazia).
+  equipada: `game.player.teleport(0, 0);
+    game.selectSlot?.(1);`,
 };
 
 const server = await startServer(root);

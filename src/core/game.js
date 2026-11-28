@@ -11,6 +11,7 @@ import { createForest } from '../world/forest.js';
 import { applyAtmosphere } from '../world/environment.js';
 import { createPlayer } from '../player/player.js';
 import { createCross, createSpriteCrossVisual } from '../player/cross.js';
+import { createInventory } from '../player/inventory.js';
 import { createEntityManager } from '../systems/entityManager.js';
 import { createBuildings, insideBuilding } from '../world/buildings/index.js';
 import { createInteractions } from '../systems/interact.js';
@@ -58,6 +59,10 @@ export class Game {
     this.random = random;
     this.sounds = sounds ?? createEntitySounds(config.audio.entity);
     this.cross = null;
+    /** Item selecionado (player/inventory.js). */
+    this.inventory = createInventory(config.items);
+    /** Controlador de cada item de CONFIG.items: { equip(valor, segurando) }. */
+    this.equipment = {};
     this.targeting = null;
     this.exorcism = null;
     /** Entidade sob a mira, ou null. */
@@ -131,6 +136,8 @@ export class Game {
         if (action === 'lantern') this.lights.flashlight.toggle();
         else if (action === 'interact') this.#interact();
         else if (action === 'journal') this.openJournal();
+        else if (action === 'stow') this.stowItem();
+        else if (action.startsWith('slot')) this.selectSlot(Number(action.slice(4)));
       };
       this.input.attach();
       // Contexto WebGL recuperado com a cena congelada: é preciso redesenhar.
@@ -233,6 +240,22 @@ export class Game {
     this.#setMode('paused', { notice });
   }
 
+  /** Teclas numéricas: equipa o item do espaço, ou o guarda se já estiver na mão. */
+  selectSlot(slot) {
+    if (this.mode === 'playing' && this.inventory.select(slot)) this.#applySelection();
+  }
+
+  /** Tecla G: guarda o item da mão. */
+  stowItem() {
+    if (this.mode === 'playing' && this.inventory.stow()) this.#applySelection();
+  }
+
+  #applySelection() {
+    for (const [id, item] of Object.entries(this.equipment)) {
+      item.equip(this.inventory.selected === id, this.input.isPrimaryHeld);
+    }
+  }
+
   /** Abre o caderno de investigação (só durante a exploração). */
   openJournal() {
     this.#openNotebook('journal');
@@ -270,6 +293,9 @@ export class Game {
     this.player.stop();
     this.footsteps.suspend();
     this.sounds.suspend();
+    // A imagem congelada mostra a cruz em repouso, ainda na mão.
+    this.cross.interrupt();
+    this.onHud(this.#hudState());
   }
 
   quitToMenu() {
@@ -289,6 +315,7 @@ export class Game {
     for (const building of this.buildings.buildings) building.resetDoor(false);
     this.interactions.reset();
     this.sounds.event('reset');
+    this.inventory.reset();
     this.cross.reset();
     this.exorcism.reset();
     this.target = null;
@@ -432,7 +459,8 @@ export class Game {
     const { BABYLON, scene, config, spriteManager, pixelRenderer } = this;
     const { exorcism } = config;
     const sprites = config.entityTypes.map((type) => type.visual?.sprite ?? config.entity.sprite);
-    await spriteManager.loadAll([...new Set([...sprites, exorcism.cross.sprite])]);
+    const hand = [exorcism.cross.sprite, exorcism.cross.useSprite];
+    await spriteManager.loadAll([...new Set([...sprites, ...hand])]);
     const assets = { spriteManager, pixelRenderer };
     this.entities = createEntityManager(BABYLON, scene, {
       config,
@@ -447,6 +475,7 @@ export class Game {
       requiredRaise: exorcism.requiredRaise,
       createVisual: () => createSpriteCrossVisual(BABYLON, scene, { settings: exorcism.cross, ...assets }),
     });
+    this.equipment = { cross: this.cross };
     this.targeting = createTargeting(BABYLON, exorcism);
     this.exorcism = createExorcism(exorcism);
     this.interactions = createInteractions({
@@ -522,9 +551,10 @@ export class Game {
   /** Mira, cruz e progresso; só durante o jogo. */
   #updateExorcism(delta) {
     const { camera } = this.view;
-    const holding = this.input.isPrimaryHeld;
     this.messageTime = Math.max(0, this.messageTime - delta);
-    const readyTime = this.cross.update(delta, holding);
+    const readyTime = this.cross.update(delta, this.input.isPrimaryHeld);
+    // Só a cruz equipada e em uso exorciza.
+    const holding = this.cross.using;
     this.target = this.targeting.find(
       camera.position,
       viewDirection(camera.rotation.y, camera.rotation.x),
@@ -544,7 +574,6 @@ export class Game {
       this.messageTime = this.config.exorcism.messageDuration;
     }
     const exorcising = Boolean(this.entities.exorcizing);
-    this.cross.setExorcising(exorcising);
     this.sounds.setExorcising(exorcising);
   }
 
@@ -557,6 +586,7 @@ export class Game {
     let aim = 'idle';
     if (aimed) aim = exorcizing === aimed ? 'exorcising' : 'target';
     return {
+      item: this.inventory.selected,
       raised: this.cross.amount >= config.exorcism.requiredRaise,
       aim,
       progress: focus?.isTargetable && focus.progress > 0 ? focus.progress : null,
@@ -581,7 +611,6 @@ export class Game {
       mesh.position.set(camera.position.x + forward.x * 6, 0, camera.position.z + forward.z * 6);
       mesh.setEnabled(true);
     }
-    this.cross.root.setEnabled(true);
     // As construções são desenhadas uma vez mesmo fora da vista.
     const structures = this.buildings.meshes;
     for (const mesh of structures) {
@@ -592,13 +621,17 @@ export class Game {
     // cada aparição): o Babylon.js usa um shader para cada caso.
     for (const [sx, sy] of [[1, 1], [1.05, 1.1]]) {
       for (const { mesh } of entities) mesh.scaling.set(sx, sy, 1);
-      await this.#waitForShaders([...entities.map((e) => e.mesh), this.cross.mesh, ...structures]);
+      await this.#waitForShaders([...entities.map((e) => e.mesh), ...structures]);
       this.scene.render();
     }
+    // As duas aparências da cruz: sem isto, o primeiro uso travaria o jogo.
+    await this.cross.prime(async (mesh) => {
+      await this.#waitForShaders([mesh]);
+      this.scene.render();
+    });
     // Devolve o que o estado atual manda desenhar.
     for (const mesh of structures) mesh.alwaysSelectAsActiveMesh = false;
     for (const entity of entities) entity.redraw();
-    this.cross.redraw();
     this.buildings.follow({ x: Infinity, z: Infinity }, 0);
     this.#followPlayer();
   }

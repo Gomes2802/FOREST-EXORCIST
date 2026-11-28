@@ -25,7 +25,8 @@
     },
     "watcher_01": { "file": "entities/watcher_01.png", "group": "entity", "worldHeight": 3.3, "alphaMode": "blend", "shading": "glow" },
     "wisp_01": { "file": "entities/wisp_01.png", "group": "entity", "worldHeight": 1.9, "alphaMode": "blend", "shading": "glow" },
-    "held_cross": { "file": "items/held_cross.png", "group": "held", "pixelHeight": 128 },
+    "held_cross": { "file": "items/held_cross.png", "group": "held", "pixelHeight": 666, "maxTextureSize": 666 },
+    "using_cross": { "file": "items/using_cross.png", "group": "held", "pixelHeight": 666, "maxTextureSize": 2560 },
     "cross": { "file": "items/cross.png", "group": "item", "worldHeight": 1.5, "shading": "glow" }
   }
 }

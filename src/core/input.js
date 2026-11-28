@@ -5,7 +5,7 @@
  *  - "lock": ponteiro capturado; todo movimento do mouse gira a câmera.
  *  - "drag": alternativa sem captura; gira enquanto o botão esquerdo está pressionado.
  *
- * Nos dois, segurar o botão esquerdo ergue a cruz (isPrimaryHeld).
+ * Nos dois, segurar o botão esquerdo usa o item equipado (isPrimaryHeld).
  */
 
 /** event.code identifica a posição física da tecla (vale para ABNT2, US etc.). */
@@ -18,8 +18,15 @@ export const KEY_BINDINGS = Object.freeze({
   ShiftRight: 'run',
 });
 
+/** "slot1".."slot9": teclas numéricas, do teclado principal e do numérico. */
+const SLOT_BINDINGS = Object.fromEntries(
+  [1, 2, 3, 4, 5, 6, 7, 8, 9].flatMap((n) => [[`Digit${n}`, `slot${n}`], [`Numpad${n}`, `slot${n}`]]),
+);
+
 /** Teclas de ação: disparam uma vez por pressionamento. */
-export const ACTION_BINDINGS = Object.freeze({ KeyF: 'lantern', KeyE: 'interact', KeyJ: 'journal' });
+export const ACTION_BINDINGS = Object.freeze({
+  KeyF: 'lantern', KeyE: 'interact', KeyJ: 'journal', KeyG: 'stow', ...SLOT_BINDINGS,
+});
 
 /** Saltos maiores que isto (px por evento) são falhas do navegador e são ignorados. */
 const MAX_MOUSE_STEP = 400;

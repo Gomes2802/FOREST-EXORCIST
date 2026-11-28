@@ -1,6 +1,6 @@
 {
   "name": "forest-exorcist",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "private": true,
   "description": "Terror sobrenatural em primeira pessoa com pixel art em ambiente 3D (offline).",
   "type": "module",

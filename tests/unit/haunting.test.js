@@ -34,7 +34,10 @@ async function ready(t, options) {
   t.after(() => game.dispose());
   await game.init();
   await game.play();
-  context.hold = () => emit(dom.element, 'pointerdown', { button: 0, buttons: 1 });
+  context.hold = () => {
+    if (!game.inventory.selected) game.selectSlot(1);
+    emit(dom.element, 'pointerdown', { button: 0, buttons: 1 });
+  };
   context.release = () => emit(dom.window, 'pointerup', { button: 0, buttons: 0 });
   context.run = (seconds, fps = 60) => {
     for (let i = 0; i < Math.round(seconds * fps); i += 1) game.update(1 / fps);

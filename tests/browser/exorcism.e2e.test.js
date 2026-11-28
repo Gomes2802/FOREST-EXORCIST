@@ -77,7 +77,11 @@ describe('Exorcismo no Chrome', { skip }, () => {
   const button = async (type, buttons) => {
     await page.send('Input.dispatchMouseEvent', { type, x: 640, y: 360, button: 'left', buttons, clickCount: 1 });
   };
-  const press = () => button('mousePressed', 1);
+  /** Equipa a cruz (tecla 1) se estiver guardada e aperta o botão esquerdo. */
+  const press = async () => {
+    await page.evaluate('(() => { const { game } = window.forestExorcist; if (!game.inventory.selected) game.selectSlot(1); })()');
+    await button('mousePressed', 1);
+  };
   const release = () => button('mouseReleased', 0);
 
   test('sem o botão, nada aparece; a mira identifica a entidade', async () => {
@@ -109,7 +113,7 @@ describe('Exorcismo no Chrome', { skip }, () => {
     return count;
   })()`);
 
-  test('segurar o botão ergue a cruz na tela; soltar a abaixa', async () => {
+  test('usar a cruz a desenha na tela; guardada, ela some', async () => {
     await play();
     // De costas para a entidade, com a lanterna apagada: só a cruz muda a área.
     await page.evaluate(`(() => { const { game } = window.forestExorcist;
@@ -125,8 +129,10 @@ describe('Exorcismo no Chrome', { skip }, () => {
     await shot('21-cruz-erguida');
     await release();
     await page.waitFor('window.forestExorcist.game.cross.amount === 0');
-    await delay(200);
     assert.equal((await state()).indicator, false);
+    await page.evaluate('window.forestExorcist.game.stowItem()');
+    await page.waitFor('!window.forestExorcist.game.cross.visible');
+    await delay(200);
     assert.ok((await brass()) <= without + 50);
     noProblems();
   });

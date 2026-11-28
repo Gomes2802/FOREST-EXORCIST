@@ -1,6 +1,7 @@
 /** Substitutos de canvas/imagem para testar no Node, e carga do Babylon local. */
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { inflateSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 
 export const projectPath = (path) => fileURLToPath(new URL(`../../${path}`, import.meta.url));
@@ -65,6 +66,37 @@ export function readPngSize(path) {
   const bytes = readFileSync(path);
   if (bytes.readUInt32BE(0) !== 0x89504e47) throw new Error('não é um PNG');
   return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20), colorType: bytes[25] };
+}
+
+/** Canal alfa de um PNG RGBA de 8 bits, sem entrelaçamento. */
+export function readPngAlpha(path) {
+  const bytes = readFileSync(path);
+  const { width, height } = readPngSize(path);
+  const data = [];
+  for (let offset = 8; offset < bytes.length; offset += 12 + bytes.readUInt32BE(offset)) {
+    if (bytes.toString('ascii', offset + 4, offset + 8) !== 'IDAT') continue;
+    data.push(bytes.subarray(offset + 8, offset + 8 + bytes.readUInt32BE(offset)));
+  }
+  const raw = inflateSync(Buffer.concat(data));
+  const stride = width * 4;
+  const pixels = Buffer.alloc(stride * height);
+  for (let y = 0; y < height; y += 1) {
+    const filter = raw[y * (stride + 1)];
+    for (let x = 0; x < stride; x += 1) {
+      const left = x >= 4 ? pixels[y * stride + x - 4] : 0;
+      const up = y ? pixels[(y - 1) * stride + x] : 0;
+      const corner = y && x >= 4 ? pixels[(y - 1) * stride + x - 4] : 0;
+      const guess = [0, left, up, (left + up) >> 1, paeth(left, up, corner)][filter];
+      pixels[y * stride + x] = (raw[y * (stride + 1) + 1 + x] + guess) & 255;
+    }
+  }
+  return { width, height, alpha: (x, y) => pixels[y * stride + x * 4 + 3] };
+}
+
+function paeth(a, b, c) {
+  const [pa, pb, pc] = [a, b, c].map((value) => Math.abs(a + b - c - value));
+  if (pa <= pb && pa <= pc) return a;
+  return pb <= pc ? b : c;
 }
 
 /** loadImage para o Node: confere o arquivo real e devolve uma imagem do mesmo tamanho. */

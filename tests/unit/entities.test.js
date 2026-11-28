@@ -25,7 +25,10 @@ async function ready(t, options = {}) {
   context.run = (seconds, fps = 60) => {
     for (let i = 0; i < Math.round(seconds * fps); i += 1) game.update(1 / fps);
   };
-  context.hold = () => emit(dom.element, 'pointerdown', { button: 0, buttons: 1 });
+  context.hold = () => {
+    if (!game.inventory.selected) game.selectSlot(1);
+    emit(dom.element, 'pointerdown', { button: 0, buttons: 1 });
+  };
   context.release = () => emit(dom.window, 'pointerup', { button: 0, buttons: 0 });
   context.look = (x, z, tx, tz, ty = 1.6) => {
     game.player.teleport(x, z);

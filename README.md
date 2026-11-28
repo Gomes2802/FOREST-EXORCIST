@@ -3,7 +3,7 @@
 Terror sobrenatural em primeira pessoa, em uma floresta à noite, com pixel art
 em um ambiente 3D.
 
-**Estado atual: Etapa 7 (investigação e pistas), versão 0.7.0.** Há uma cabana
+**Estado atual: Etapa 7 (investigação e pistas), versão 0.7.1.** Há uma cabana
 explorável, três entidades que aparecem, observam, somem e podem ser expulsas com
 a cruz, e uma investigação com documentos, caderno e objetivos. Nenhuma entidade
 persegue nem ataca. A Etapa 8 ainda não foi feita.
@@ -28,7 +28,9 @@ a aba e pressione `Ctrl+C` no terminal.
 | `A` / `D` | Andar para a esquerda / direita |
 | Mouse | Olhar |
 | `Shift` (segurar) | Correr |
-| Botão esquerdo (segurar) | Erguer a cruz |
+| `1` | Pegar a cruz (de novo: guardar) |
+| `G` | Guardar o item da mão |
+| Botão esquerdo (segurar) | Usar a cruz que está na mão |
 | `E` | Abrir ou fechar a porta, examinar objetos, ler documentos |
 | `J` | Abrir o caderno de investigação |
 | `F` | Ligar / desligar a lanterna |
@@ -161,11 +163,35 @@ Cada aparição segue os mesmos estados:
 Um tipo novo é uma entrada em `entityTypes`: `visual` substitui valores de
 `entity`, `behavior` os de `haunting`, e `exorcism` define tempo e mensagem.
 
+## A cruz na mão
+
+A exploração começa com a cruz guardada. A barra no canto inferior esquerdo
+mostra os itens; o que está na mão ganha a moldura dourada.
+
+| Estado | Quando | O que aparece |
+| --- | --- | --- |
+| `unequipped` | Guardada (início, `G` ou `1`) | Nada na mão; o botão esquerdo não faz nada |
+| `equipped_idle` | Depois de `1` | `held_cross.png`, parada |
+| `equipped_using` | Botão esquerdo pressionado | Os quadros de `using_cross.png` |
+
+A animação passa do primeiro ao último quadro (a cruz se vira para a frente) e
+fica no último enquanto o botão durar. Soltar volta ao repouso na hora. Pausa,
+documento e caderno encerram o uso; ao voltar, a cruz continua na mão e é preciso
+apertar de novo. Pegar a cruz com o botão já pressionado também exige novo aperto.
+
+Ajustes em `exorcism.cross` (`src/config.js`): `frames` e `fps` (12), `loop`
+(`true` repete a sequência), `height`, `position` e `crop`. O `crop` é a faixa
+transparente à esquerda e no topo das imagens, que não é desenhada: ao trocar a
+arte, confira-o (um teste avisa se cortar o desenho).
+
+Para um item novo: acrescente-o a `items` (`id`, `slot`, `name`) e registre em
+`Game.equipment[id]` um objeto com `equip(valor, botãoPressionado)`.
+
 ## Exorcismo
 
 1. Quando uma entidade aparecer, aproxime-se: dentro do alcance (10), a mira vira
    um losango vermelho.
-2. Segure o botão esquerdo para erguer a cruz e mantenha a mira sobre ela.
+2. Pegue a cruz (`1`), segure o botão esquerdo e mantenha a mira sobre a entidade.
 3. Quando a barra se completar, a entidade é expulsa.
 
 Com duas por perto, só a que está na mira progride. Soltar o botão ou desviar a
@@ -181,7 +207,7 @@ Troncos, pedras altas e paredes a escondem da mira; janelas e porta aberta não.
 | Perda por segundo ao interromper | `exorcism.decayPerSecond` | 0 (guarda) |
 | Obstáculos bloqueiam a mira | `exorcism.blockedByObstacles` | `true` |
 | Mensagem e clarão ao concluir | `exorcism.message`, `messageDuration`, `flash` | — |
-| Cruz: sprite, tamanho, posição, movimento da mão | `exorcism.cross` | — |
+| Cruz: imagens, animação, tamanho, posição | `exorcism.cross` | — |
 
 Com a perda por segundo em 0,25, por exemplo, a barra esvazia em 4 s. Para trocar
 a cruz por um modelo, passe outra `createVisual` a `createCross`
@@ -225,7 +251,8 @@ Nenhum código precisa mudar.
 | `watcher_01` | `entities/` | 30x56 | 3,3 (observadora) |
 | `wisp_01` | `entities/` | 26x34 | 1,9 (instável) |
 | `cross` | `items/` | 16x24 | 1,5 (cruz fincada na trilha) |
-| `held_cross` | `items/` | 500x666 (reduzida a 128 de altura) | cruz na mão do jogador |
+| `held_cross` | `items/` | 500x666 (resolução original) | cruz na mão, em repouso |
+| `using_cross` | `items/` | 2500x666: 5 quadros de 500x666 em uma linha | animação de uso |
 
 O arquivo de cada um é o próprio ID com `.png`.
 
@@ -521,7 +548,8 @@ src/
   core/camera.js          rotação, limites de visão e balanço
   world/                  forest.js (vegetação), environment.js (terreno, céu,
                           neblina), lighting.js (noite e lanterna), colliders.js
-  player/                 player.js (movimento e colisões), cross.js (cruz)
+  player/                 player.js (movimento e colisões), cross.js (cruz),
+                          inventory.js (item selecionado)
   world/buildings/        index.js (montagem), cabin.js (planta), clues.js
                           (pistas), geometry.js (caixas reunidas em malhas)
   entities/entity.js      máquina de estados e aparência das entidades
@@ -594,8 +622,13 @@ Para distribuir uma versão, faça `git checkout v0.4.1`, `npm run build` e copi
 - A luz da lamparina e a lanterna atravessam paredes (não há sombras dinâmicas).
 - A porta aberta não tem colisão própria: dá para atravessar a folha.
 - A vegetação em volta da cabana é plana e gira para a câmera.
-- A cruz é um sprite plano. No modo sem captura, arrastar para olhar também a
-  ergue.
+- A cruz é um sprite plano, desenhado na resolução interna da imagem 3D. No modo
+  sem captura, arrastar para olhar também a usa, se estiver na mão.
+- As duas imagens da cruz têm enquadramentos diferentes: a mão de `held_cross.png`
+  é maior que a do primeiro quadro da animação, e nota-se a troca ao apertar o
+  botão. Abaixo de 12 FPS a animação fica mais lenta, sem pular quadros.
+- A folha de animação (2500 px de largura) não funciona em placas de vídeo limitadas
+  a texturas de 2048 px.
 - A mira considera como bloqueio troncos, pedras, troncos caídos e paredes: copas,
   arbustos e móveis não escondem uma entidade.
 - Em software, há um quadro mais lento na primeira vez que o interior da cabana

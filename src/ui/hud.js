@@ -1,14 +1,16 @@
 /**
- * Interface durante o jogo: mira, aviso de cruz erguida, barra do exorcismo e
- * mensagem de conclusão. Não conhece o motor 3D; recebe o estado a cada quadro e
+ * Interface durante o jogo: itens, mira, aviso de cruz erguida, barra do
+ * exorcismo e mensagem de conclusão. Não conhece o motor 3D; recebe o estado a cada quadro e
  * só mexe na página quando algo muda.
  */
 export class Hud {
   /**
    * @param {Document} document
-   * @param {{ flash?: boolean }} [options] flash: clarão discreto ao concluir.
+   * @param {{ flash?: boolean, items?: ReadonlyArray<{ id: string, slot: number, name: string }> }} [options]
+   *   flash: clarão discreto ao concluir; items: um espaço na barra para cada um.
    */
-  constructor(document, { flash = true } = {}) {
+  constructor(document, { flash = true, items = [] } = {}) {
+    this.slots = createSlots(document, items);
     this.crosshair = document.getElementById('crosshair');
     this.indicator = document.getElementById('cross-indicator');
     this.bar = document.getElementById('exorcism');
@@ -24,15 +26,20 @@ export class Hud {
   }
 
   /**
-   * @param {{ raised: boolean, aim: 'idle'|'target'|'exorcising',
+   * @param {{ item?: string|null, raised: boolean, aim: 'idle'|'target'|'exorcising',
    *   progress: number|null, message: string|null, notice?: string|null,
    *   prompt?: string|null, note?: string|null, toast?: string|null }} state
    *   notice: aviso discreto (ex.: qualidade gráfica reduzida); prompt: ação
    *   disponível na tecla E; note: o que se descobriu ao examinar; toast: aviso da
    *   investigação.
    */
-  render({ raised, aim, progress, message, notice = null, prompt = null, note = null, toast = null }) {
+  render({
+    item = null, raised, aim, progress, message, notice = null, prompt = null, note = null, toast = null,
+  }) {
     const percent = progress === null ? null : Math.floor(progress * 100);
+    this.#changed('item', item, () => {
+      for (const [id, slot] of this.slots) slot.dataset.selected = String(id === item);
+    });
     this.#changed('raised', raised, () => {
       this.indicator.hidden = !raised;
     });
@@ -78,4 +85,22 @@ export class Hud {
     this.last[key] = value;
     apply();
   }
+}
+
+/** Monta a barra de itens: tecla e nome de cada um. */
+function createSlots(document, items) {
+  const bar = document.getElementById('item-bar');
+  if (!bar) return new Map();
+  return new Map(items.map(({ id, slot, name }) => {
+    const entry = document.createElement('li');
+    entry.dataset.item = id;
+    entry.dataset.selected = 'false';
+    const key = document.createElement('kbd');
+    key.textContent = String(slot);
+    const label = document.createElement('span');
+    label.textContent = name;
+    entry.append(key, ' ', label);
+    bar.append(entry);
+    return [id, entry];
+  }));
 }

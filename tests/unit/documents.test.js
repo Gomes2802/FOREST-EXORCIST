@@ -229,6 +229,7 @@ test('entrar na cabana, examinar objetos e exorcizar atualizam objetivos e desco
   game.entity.reset();
   game.haunting.summon(1.3, 11, { pinned: true });
   look(0.5, 6, { x: 1.3, y: 1.6, z: 11 });
+  game.selectSlot(1);
   input.isPrimaryHeld = true;
   run(CONFIG.exorcism.duration + 1.5);
   assert.equal(game.entity.state, 'exorcised');
@@ -240,6 +241,7 @@ test('abrir um documento no meio de um exorcismo o interrompe como a pausa e gua
   const { game, input, run, look } = await ready(t);
   game.haunting.summon(1.3, 11, { pinned: true });
   look(0.5, 6, { x: 1.3, y: 1.6, z: 11 });
+  game.selectSlot(1);
   input.isPrimaryHeld = true;
   run(2);
   const { progress } = game.entity;

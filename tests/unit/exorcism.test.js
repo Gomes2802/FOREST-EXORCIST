@@ -22,7 +22,10 @@ async function ready(t, options) {
   // Etapa 4 isolada: entidade presente no lugar antigo, sem o comportamento da Etapa 5.
   game.haunting.summon(1.3, 11, { pinned: true });
 
-  context.hold = () => emit(dom.element, 'pointerdown', { button: 0, buttons: 1 });
+  context.hold = () => {
+    if (!game.inventory.selected) game.selectSlot(1);
+    emit(dom.element, 'pointerdown', { button: 0, buttons: 1 });
+  };
   context.release = () => emit(dom.window, 'pointerup', { button: 0, buttons: 0 });
   context.run = (seconds, fps = 60) => {
     for (let i = 0; i < Math.round(seconds * fps); i += 1) game.update(1 / fps);
@@ -55,19 +58,18 @@ test('há uma única entidade de teste, visível, não sólida e fora da florest
   assert.ok(forest.placements.every((p) => p.sprite !== CONFIG.entity.sprite));
 });
 
-test('a cruz só aparece com o botão esquerdo, subindo e descendo suavemente', async (t) => {
-  const { game, hold, release, run } = await ready(t);
+test('a cruz equipada sobe suavemente, e guardada desce até sumir', async (t) => {
+  const { game, run } = await ready(t);
   const { cross } = game;
   run(0.2);
   assert.equal(cross.visible, false);
-  hold();
+  game.selectSlot(1);
   const heights = [];
-  for (let i = 0; i < 30; i += 1) {
+  for (let i = 0; i < 60; i += 1) {
     game.update(1 / 60);
     heights.push(cross.root.position.y);
   }
   assert.equal(cross.visible, true);
-  assert.equal(cross.amount, 1);
   for (let i = 1; i < heights.length; i += 1) {
     // A mão ultrapassa um pouco a posição final e assenta (ver createHandMotion).
     assert.ok(heights[i] - heights[i - 1] < 0.15, 'salto na animação');
@@ -75,10 +77,10 @@ test('a cruz só aparece com o botão esquerdo, subindo e descendo suavemente', 
   const top = Math.max(...heights);
   assert.ok(top - heights.at(-1) < 0.05, `sobrepasso exagerado: ${top - heights.at(-1)}`);
   assert.ok(heights.filter((h, i) => i > 0 && h > heights[i - 1] + 1e-6).length > 8, 'sem animação');
-  release();
+  game.selectSlot(1);
   run(settings.cross.lowerTime / 2);
-  assert.ok(cross.amount > 0.2 && cross.amount < 0.8, `descendo: ${cross.amount}`);
-  run(0.3);
+  assert.equal(cross.visible, true, 'ainda descendo');
+  run(1);
   assert.equal(cross.visible, false);
 });
 
@@ -93,23 +95,25 @@ test('a cruz fica presa à câmera, abaixo da mira, sem luz nem neblina', async 
   assert.equal(mesh.material.disableLighting, true);
   assert.equal(mesh.material.fogEnabled, false);
   const { x, y, z } = root.position;
-  const halfHeight = settings.cross.height / 2;
-  assert.ok(y + halfHeight < -0.05 * z, 'a cruz cobre a mira');
+  // O plano só cobre a parte desenhada: o topo transparente fica de fora.
+  const artTop = settings.cross.height * (0.5 - settings.cross.crop.top);
+  assert.ok(y + artTop < -0.05 * z, 'a cruz cobre a mira');
   assert.ok(x > 0.15, 'a cruz fica ao lado do centro');
 });
 
-test('só o botão esquerdo levanta a cruz, e só durante o jogo', async (t) => {
+test('só o botão esquerdo usa a cruz, e só durante o jogo', async (t) => {
   const { game, dom, run } = await ready(t);
+  game.selectSlot(1);
   emit(dom.element, 'pointerdown', { button: 2, buttons: 2 });
   run(0.4);
   assert.equal(game.cross.amount, 0);
   // Botão esquerdo apertado e solto enquanto outro continua pressionado.
   emit(dom.document, 'pointermove', { button: 0, buttons: 3, movementX: 0, movementY: 0 });
   run(0.4);
-  assert.equal(game.cross.amount, 1);
+  assert.deepEqual([game.cross.using, game.cross.amount], [true, 1]);
   emit(dom.document, 'pointermove', { button: 0, buttons: 2, movementX: 0, movementY: 0 });
   run(0.4);
-  assert.equal(game.cross.amount, 0);
+  assert.deepEqual([game.cross.using, game.cross.amount], [false, 0]);
   game.quitToMenu();
   emit(dom.element, 'pointerdown', { button: 0, buttons: 1 });
   run(0.4);
@@ -246,15 +250,16 @@ test('o resultado não depende da taxa de quadros', async (t) => {
   for (const value of results) close(value, results[0], 1e-6);
 });
 
-test('pausar congela o progresso e a cruz; retomar exige apertar de novo', async (t) => {
+test('pausar congela o progresso e encerra o uso; retomar exige apertar de novo', async (t) => {
   const { game, face, hold, run } = await ready(t);
   face();
   hold();
   run(1.5);
-  const frozen = [game.entity.progress, game.cross.amount, game.entity.mesh.position.y];
+  const frozen = [game.entity.progress, game.entity.mesh.position.y];
   game.pause();
+  assert.equal(game.cross.amount, 0);
   run(3);
-  assert.deepEqual([game.entity.progress, game.cross.amount, game.entity.mesh.position.y], frozen);
+  assert.deepEqual([game.entity.progress, game.entity.mesh.position.y], frozen);
   await game.resume();
   run(1);
   assert.equal(game.cross.amount, 0, 'nenhum botão fica preso');
@@ -284,7 +289,7 @@ test('a interface recebe os estados certos', async (t) => {
   };
   run(0.1);
   assert.deepEqual(hud, {
-    raised: false, aim: 'idle', progress: null, message: null, notice: null, prompt: null, note: null, toast: null,
+    item: null, raised: false, aim: 'idle', progress: null, message: null, notice: null, prompt: null, note: null, toast: null,
   });
   face();
   assert.equal(hud.aim, 'target');

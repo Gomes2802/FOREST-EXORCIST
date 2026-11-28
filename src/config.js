@@ -6,10 +6,16 @@
 import { INVESTIGATION } from './content/investigation.js';
 
 export const CONFIG = deepFreeze({
-  version: '0.7.0',
+  version: '0.7.1',
 
   /** Etapa 7: documentos, objetivos e descobertas (src/content/investigation.js). */
   investigation: INVESTIGATION,
+
+  /**
+   * Itens que podem ir para a mão. `slot` é a tecla numérica; o `id` liga o item
+   * ao seu controlador (Game.equipment).
+   */
+  items: [{ id: 'cross', slot: 1, name: 'Cruz' }],
 
   display: {
     /** Resolução de referência. O canvas se adapta à janela. */
@@ -535,19 +541,29 @@ export const CONFIG = deepFreeze({
     flash: true,
     /** Cruz na mão: posição em relação à câmera [direita, cima, frente]. */
     cross: {
+      /** Imagem em repouso e folha de animação de uso (quadros lado a lado). */
       sprite: 'held_cross',
-      height: 0.56,
-      position: [0.34, -0.36, 0.9],
-      /** Quanto ela desce até sair da tela. */
+      useSprite: 'using_cross',
+      frames: 5,
+      /** Quadros por segundo; loop false para no último enquanto o botão durar. */
+      fps: 12,
+      loop: false,
+      /**
+       * Fração transparente à esquerda e no topo de cada quadro, que não é
+       * desenhada. Ajuste se trocar a arte (um teste confere as imagens).
+       */
+      crop: { left: 0.31, top: 0.27 },
+      height: 0.66,
+      position: [0.36, -0.29, 0.9],
+      /** Quanto ela desce até sair da tela ao ser guardada. */
       loweredOffset: 0.62,
       tilt: -0.08,
       raiseTime: 0.25,
       lowerTime: 0.2,
-      /** Cor na penumbra; brilha durante o exorcismo. */
+      /** Cor na penumbra. */
       tint: '#ffffff',
-      tremor: 0,
       /**
-       * Movimento da mão: omega (rapidez) e zeta (amortecimento; abaixo de 1 há
+       * Movimento da mão ao equipar e guardar: omega (rapidez) e zeta (amortecimento; abaixo de 1 há
        * um pequeno sobrepasso). arcX é quanto a cruz vem da direita, arcTilt a
        * inclinação ao sair, sway o atraso do pulso.
        */

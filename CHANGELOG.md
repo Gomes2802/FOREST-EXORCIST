@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.7.1 — 2026-11-27
+
+Seleção de item e animação de uso da cruz. A Etapa 8 não foi feita.
+
+### Adicionado
+
+- Seleção de item: `1` pega ou guarda a cruz, `G` guarda. Barra de itens no canto
+  inferior esquerdo, preparada para outros (`CONFIG.items`, `player/inventory.js`).
+- Estados `unequipped`, `equipped_idle` e `equipped_using`.
+- Animação de uso pela folha `using_cross.png` (5 quadros, 12 por segundo, parando
+  no último), independente da taxa de quadros e sem pular quadros.
+
+### Alterado
+
+- A exploração começa com a cruz guardada: é preciso apertar `1` antes de usar o
+  botão esquerdo. Tempos, alcance e progresso do exorcismo não mudaram.
+- `held_cross.png` é mostrada na resolução original, um pouco maior na tela, e fica
+  parada enquanto equipada. O movimento de subida agora é o de pegar e guardar.
+- Pausa, leitura e caderno encerram o uso e mostram a cruz em repouso.
+- Removidos o brilho e o tremor da cruz, que já não tinham efeito visível.
+
+### Desempenho
+
+- A folha é carregada uma vez; a cruz usa uma malha e um material, preparados no
+  carregamento: nenhum shader, textura ou malha é criado durante o jogo.
+- A parte transparente das imagens não é desenhada (cerca de metade da área).
+- Parada, a cruz não recalcula posição.
+
 ## 0.7.0 — 2026-11-27
 
 Etapa 7: investigação e pistas. A Etapa 8 não foi feita.

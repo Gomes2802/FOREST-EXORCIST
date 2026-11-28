@@ -106,6 +106,7 @@ describe('Presença sobrenatural no Chrome', { skip }, () => {
     await page.evaluate('window.forestExorcist.game.haunting.summon(1.3, 11, { mood: "shy", stay: 3 })');
     await page.evaluate('window.forestExorcist.game.player.teleport(0.5, 4)');
     await lookAtEntity();
+    await page.evaluate('window.forestExorcist.game.selectSlot(1)');
     await press(1, 'mousePressed');
     await page.waitFor('window.forestExorcist.game.entity.state === "exorcizing"', 5000);
     const start = await state();
@@ -145,7 +146,8 @@ describe('Presença sobrenatural no Chrome', { skip }, () => {
     const before = await count();
     // Caminho real: surge sozinha, observa, com a cruz erguida, e desaparece.
     await page.waitFor('window.forestExorcist.game.entity.state === "watching"', 40000);
-    await page.evaluate('window.forestExorcist.game.input.isPrimaryHeld = true');
+    await page.evaluate(`(() => { const { game } = window.forestExorcist;
+      game.selectSlot(1); game.input.isPrimaryHeld = true; })()`);
     await delay(1000);
     await page.evaluate('window.forestExorcist.game.haunting.summon(0, 14, { mood: "still", stay: 3 })');
     await page.waitFor('window.forestExorcist.game.entity.state === "dormant"', 15000);
