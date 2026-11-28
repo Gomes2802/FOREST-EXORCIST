@@ -382,7 +382,7 @@ export const CONFIG = deepFreeze({
         anchorChance: 0.75,
         relocate: { max: 2, wait: 2.5, unseenFor: 1, minStep: 3, maxStep: 7, hiddenAngle: 62 },
       },
-      exorcism: { duration: 5, message: 'A observadora foi expulsa.' },
+      exorcism: { duration: 2.6, message: 'A observadora foi expulsa.' },
     },
     {
       /** Aparições curtas, aos saltos; ao sumir, pode voltar logo em outro ponto. */
@@ -413,7 +413,7 @@ export const CONFIG = deepFreeze({
         anchorChance: 0.2,
         blink: { chance: 0.65, max: 2, delay: { min: 0.7, max: 1.6 } },
       },
-      exorcism: { duration: 2.5, message: 'A presença instável se desfez.' },
+      exorcism: { duration: 1.6, message: 'A presença instável se desfez.' },
     },
   ],
 
